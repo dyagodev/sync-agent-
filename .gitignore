@@ -1,0 +1,8 @@
+node_modules
+.env
+checkpoint.json
+queries/vendas.sql
+queries/itens.sql
+queries/pagamentos.sql
+dist
+logs

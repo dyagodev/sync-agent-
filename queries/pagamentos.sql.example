@@ -1,0 +1,15 @@
+-- AJUSTE AQUI: troque pela tabela real de formas de pagamento da venda.
+--
+-- Contrato que o agente espera desta query:
+--   venda_id       -> deve bater com o "id" retornado em vendas.sql
+--   forma_pagamento -> código bruto do sistema de origem (ex: "D", "C", "P"...),
+--                       o agente traduz isso pro nosso enum usando MAPA_FORMAS_PAGAMENTO no .env
+--   valor          -> valor pago nessa forma
+--
+-- O parâmetro $1 é um array com os ids de venda do lote atual.
+select
+  fp.venda_id         as venda_id,
+  fp.forma_pagamento  as forma_pagamento,
+  fp.valor            as valor
+from vendas_formas_pagamento fp
+where fp.venda_id = any($1::bigint[]);

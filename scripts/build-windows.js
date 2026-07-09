@@ -1,0 +1,48 @@
+const fs = require("node:fs");
+const path = require("node:path");
+
+const raiz = path.join(__dirname, "..");
+const destino = path.join(raiz, "dist", "win");
+
+fs.mkdirSync(path.join(destino, "queries"), { recursive: true });
+
+for (const arquivo of fs.readdirSync(path.join(raiz, "queries"))) {
+  if (arquivo.endsWith(".sql.example")) {
+    fs.copyFileSync(path.join(raiz, "queries", arquivo), path.join(destino, "queries", arquivo));
+  }
+}
+
+fs.copyFileSync(path.join(__dirname, "INSTALAR.bat"), path.join(destino, "INSTALAR.bat"));
+
+fs.writeFileSync(
+  path.join(destino, "LEIA-ME.txt"),
+  [
+    "Agente de sincronizacao Link Pro -> Ferro Cianorte",
+    "===================================================",
+    "",
+    "Como instalar:",
+    "",
+    "1. Copie esta pasta inteira (dist\\win) para a maquina onde fica o",
+    "   Postgres do Link Pro.",
+    "2. De dois cliques em INSTALAR.bat.",
+    "3. Uma janela vai abrir no navegador (localhost:4848). Preencha os",
+    "   dados do Postgres do Link Pro e clique em",
+    "   \"Gerar log da estrutura do banco\" -- isso mostra todas as tabelas",
+    "   e colunas do banco, sem precisar de acesso direto por outra pessoa.",
+    "   Um arquivo de log tambem fica salvo em logs\\ dentro desta pasta.",
+    "4. Abra a pasta \"queries\" e renomeie os arquivos .sql.example para",
+    "   .sql, ajustando as consultas ao schema real do banco (use o log",
+    "   do passo 3 como referencia -- veja o README do projeto para o",
+    "   contrato esperado de cada query).",
+    "5. Volte na janela de configuracao, preencha o resto (API do Ferro",
+    "   Cianorte, mapeamento de lojas, formas de pagamento) e salve. O",
+    "   agente ja fica configurado para iniciar sozinho sempre que o",
+    "   Windows ligar.",
+    "",
+    "Depois de salvar a configuracao pela primeira vez, feche o agente",
+    "(pelo icone dele na bandeja/terminal) e abra de novo pelo atalho",
+    "criado na Inicializacao do Windows, ou reinicie o computador.",
+  ].join("\r\n"),
+);
+
+console.log(`Pacote Windows pronto em: ${destino}`);
