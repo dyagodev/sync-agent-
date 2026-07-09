@@ -95,15 +95,19 @@ async function testarConexao(dadosConexao) {
 }
 
 /**
- * Busca as lojas cadastradas no Link Pro (tabela dados_empresa_loja), pra
- * facilitar preencher o mapeamento de lojas na janela de configuração sem
- * precisar abrir o Link Pro pra descobrir nome/id de cada uma. Devolve []
- * se essa tabela não existir nessa instalação (recurso best-effort).
+ * Busca as lojas conhecidas no Link Pro, pra facilitar preencher o
+ * mapeamento de lojas na janela de configuração sem precisar abrir o Link
+ * Pro pra descobrir nome/código de cada uma.
  *
- * Também marca qual loja "provavelmente é essa" comparando o campo
- * "servidor" de cada linha com o host que o usuário está usando pra
- * conectar — no schema real cada loja tem seu próprio servidor Postgres, e
- * bater esse valor ajuda a identificar automaticamente qual delas é esta.
+ * Confirmado direto na tela "Dados da Empresa → Lojas" do Link Pro: essa
+ * tela lista, na grade, as OUTRAS lojas conhecidas por esta (tabela
+ * dados_empresa_loja, com Código/Loja/Servidor/Porta) — a loja ATUAL (a
+ * dona desta conexão) fica separada, em "Informações desta loja", que
+ * corresponde à tabela dados_empresa (1 linha, campo codigo_loja).
+ *
+ * Por isso buscamos as duas: "esta loja" (dados_empresa, sempre marcada
+ * como a loja da conexão atual) e as demais (dados_empresa_loja, só
+ * referência — não são a loja desta conexão).
  */
 async function buscarLojasLinkPro(dadosConexao) {
   const client = new pg.Client({
@@ -118,21 +122,42 @@ async function buscarLojasLinkPro(dadosConexao) {
 
   await client.connect();
 
+  const lojas = [];
+
   try {
     const { rows } = await client.query(
-      "select id_dados_empresa_loja, descricao, nome_fantasia, servidor from dados_empresa_loja order by id_dados_empresa_loja",
+      "select codigo_loja, descricao_loja, nome_fantasia, razao_social from dados_empresa limit 1",
     );
-
-    return rows.map((loja) => ({
-      id: String(loja.id_dados_empresa_loja),
-      nome: loja.nome_fantasia || loja.descricao || `Loja ${loja.id_dados_empresa_loja}`,
-      provavelEsta: loja.servidor === dadosConexao.host,
-    }));
+    const atual = rows[0];
+    if (atual && atual.codigo_loja != null) {
+      lojas.push({
+        id: String(atual.codigo_loja),
+        nome: `${atual.descricao_loja || atual.nome_fantasia || atual.razao_social || "Esta loja"} (esta conexão)`,
+        provavelEsta: true,
+      });
+    }
   } catch {
-    return [];
-  } finally {
-    await client.end().catch(() => undefined);
+    // dados_empresa não existe nessa instalação — segue sem "esta loja".
   }
+
+  try {
+    const { rows } = await client.query(
+      "select codigo, descricao, nome_fantasia from dados_empresa_loja order by codigo",
+    );
+    for (const loja of rows) {
+      lojas.push({
+        id: String(loja.codigo),
+        nome: loja.nome_fantasia || loja.descricao || `Loja ${loja.codigo}`,
+        provavelEsta: false,
+      });
+    }
+  } catch {
+    // dados_empresa_loja não existe nessa instalação — segue só com "esta loja".
+  }
+
+  await client.end().catch(() => undefined);
+
+  return lojas;
 }
 
 async function encerrarConexao() {

@@ -160,6 +160,13 @@ async function paginaHtml({ salvo = false } = {}) {
     <button type="button" class="secundario" onclick="buscarLojasLinkPro()">Buscar lojas no Link Pro</button>
     <div id="resultado-lojas-linkpro"></div>
     <div id="lojas-linkpro-encontradas"></div>
+    <small>
+      Essa busca lê <code>dados_empresa</code> (a loja desta conexão, marcada com ★) e
+      <code>dados_empresa_loja</code> (as outras lojas conhecidas) — exatamente o que aparece
+      na tela "Dados da Empresa → Lojas" do próprio Link Pro. A loja marcada com ★ é o código
+      real usado nas queries (<code>dados_empresa.codigo_loja</code>), então normalmente é só
+      clicar nela e escolher a loja correspondente do Ferro Cianorte no select ao lado.
+    </small>
 
     <h2>Formas de pagamento</h2>
     <small>Qual código o Link Pro usa para cada forma de pagamento nossa (deixe em branco se não existir).</small><br /><br />
@@ -234,7 +241,7 @@ async function paginaHtml({ salvo = false } = {}) {
           return;
         }
 
-        resultado.textContent = corpo.lojas.length + " loja(s) encontrada(s). Clique pra adicionar ao mapeamento:";
+        resultado.textContent = corpo.lojas.length + " loja(s) encontrada(s) (★ = a loja desta conexão). Clique pra adicionar ao mapeamento:";
         resultado.style.color = "#166534";
 
         for (const loja of corpo.lojas) {

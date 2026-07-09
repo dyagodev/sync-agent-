@@ -19,13 +19,14 @@
 -- manual — exatamente o que precisamos. "qtd_estoque_novo" já é o valor
 -- final depois da mudança.
 --
--- Mesma observação de vendas.sql sobre loja_externa ser fixo (schema real
--- sem coluna de loja — provável um Postgres por loja, ver README).
+-- Mesma observação de vendas.sql sobre loja_externa vir de
+-- dados_empresa.codigo_loja (código real desta loja) em vez de um valor
+-- inventado — ver aquele arquivo pra entender o motivo.
 --
 -- O parâmetro $1 é o timestamp da última verificação (época Unix 0 na
 -- primeira execução, ou seja: a primeira rodada traz o estoque inteiro).
 select
-  '1'                as loja_externa,
+  (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
   p.cean             as codigo_barras,
   l.qtd_estoque_novo as quantidade,
   l.data_hora        as atualizado_em

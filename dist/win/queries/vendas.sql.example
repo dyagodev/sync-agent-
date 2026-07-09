@@ -1,7 +1,8 @@
 -- Baseado no schema real confirmado do InkDB (Link Pro / Cervantes) em
--- 2026-07-09. Se a sua instalação for parecida, pode funcionar direto; se
--- for uma versão diferente, use "Gerar log da estrutura do banco" na janela
--- de configuração pra conferir/ajustar nomes de tabela/coluna.
+-- 2026-07-09 (banco + a tela "Dados da Empresa → Lojas" do próprio Link
+-- Pro). Se a sua instalação for parecida, pode funcionar direto; se for uma
+-- versão diferente, use "Gerar log da estrutura do banco" na janela de
+-- configuração pra conferir/ajustar nomes de tabela/coluna.
 --
 -- Contrato que o agente espera desta query (não pode mudar os apelidos):
 --   id           -> identificador único e crescente da venda
@@ -9,17 +10,18 @@
 --   loja_externa -> identificador da loja dessa venda
 --
 -- IMPORTANTE: no schema real, não existe coluna de loja em "negociacao" —
--- tudo indica que cada loja tem seu próprio Postgres (ver dados_empresa_loja
--- no log gerado: uma linha por loja, cada uma com "servidor" próprio). Por
--- isso loja_externa é um valor FIXO aqui, não uma coluna. Se a sua
--- instalação for diferente (uma única base com todas as lojas), troque
--- "'1'" abaixo pela coluna real de loja.
+-- cada loja roda seu próprio Postgres (confirmado na tela "Dados da Empresa
+-- → Lojas": cada filial tem host/porta próprios). A tabela dados_empresa_loja
+-- lista as OUTRAS lojas conhecidas por esta, não a própria — o código desta
+-- loja específica fica em dados_empresa.codigo_loja, é o que usamos abaixo.
+-- Se a sua instalação for diferente (uma única base com todas as lojas),
+-- troque a subquery abaixo pela coluna real de loja em "negociacao".
 --
 -- O parâmetro $1 é o id da última venda já processada (0 na primeira execução).
 select
   n.id_negociacao as id,
   n.data          as data_hora,
-  '1'             as loja_externa
+  (select codigo_loja::text from dados_empresa limit 1) as loja_externa
 from negociacao n
 where n.id_negociacao > $1
   and n.venda = true

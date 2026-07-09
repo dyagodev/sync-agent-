@@ -47,26 +47,25 @@ foi descoberto:
   (venda ou ajuste manual/balanço) com timestamp — é o que `estoque.sql` usa
   pra sincronização incremental.
 
-### ⚠️ Achado importante: provavelmente um Postgres por loja
+### ✅ Confirmado: um Postgres por loja, código real da loja em `dados_empresa`
 
 Não existe coluna de loja/filial em `negociacao`, `produto`, `cliente` nem
-`caixa`. O único rastro de multiloja é a tabela `dados_empresa_loja` (uma
-linha por loja, cada uma com `servidor`/`porta` próprios) e `fdw_loja`
-(*foreign data wrapper* — mecanismo do Postgres pra consultar outro servidor
-remotamente). Tudo indica que **cada loja roda seu próprio banco Postgres**, e
-uma instância do agente só enxerga o banco de uma loja por vez.
+`caixa`. Isso foi confirmado direto na tela **"Dados da Empresa → Lojas"** do
+próprio Link Pro: cada loja roda seu **próprio banco Postgres**, com host e
+porta próprios, e essa tela é literalmente a tabela `dados_empresa_loja` —
+mas ela lista as **outras** lojas conhecidas por esta (via *foreign data
+wrapper*, pra consulta remota entre filiais), não a loja da conexão atual.
+O código da loja atual (o que aparece em "Informações desta loja" na tela)
+fica em `dados_empresa.codigo_loja` — é esse valor que `vendas.sql` e
+`estoque.sql` usam de verdade:
 
-Por isso `vendas.sql` e `estoque.sql` retornam um `loja_externa` **fixo**
-(`'1'`), não vindo de coluna nenhuma. Na prática:
+```sql
+(select codigo_loja::text from dados_empresa limit 1) as loja_externa
+```
 
-- Rode **uma instância do agente por loja** (cada uma configurada com o
-  `SOURCE_PG_HOST`/porta do servidor daquela loja).
-- Em cada instância, o "Mapeamento de lojas" só precisa de **uma linha**:
-  o valor fixo da query (`1`) apontando pra loja certa do Ferro Cianorte.
-- Se isso se confirmar errado (ex: as lojas na verdade compartilham o mesmo
-  servidor via FDW), rode de novo o "Gerar log da estrutura do banco" — a
-  seção "Amostras de dados" no log mostra o conteúdo de `dados_empresa_loja`
-  com o `servidor` de cada loja, o que confirma ou derruba essa hipótese.
+Ou seja: **uma instância do agente por loja** (cada uma configurada com o
+`SOURCE_PG_HOST`/porta daquela loja), e cada instância já traz sozinha o
+código real dessa loja — sem precisar inventar nem digitar nada na query.
 
 ### Se precisar readaptar (outra instalação, versão diferente do Link Pro)
 
@@ -151,15 +150,14 @@ Abra `http://localhost:4848` e preencha:
   referência assim que essas credenciais estiverem salvas.
 - **Comportamento**: intervalo entre verificações e a porta desta própria
   janela.
-- **Mapeamento de lojas**: uma linha por loja do Link Pro, ligando o
-  código/id que ele usa pra cada uma das nossas lojas. O lado "Ferro Cianorte"
-  já vem como uma lista pra escolher (nada de decorar id) — e o botão
-  **"Buscar lojas no Link Pro"** lê a tabela `dados_empresa_loja` de lá e
-  mostra as lojas encontradas como botões prontos pra clicar e adicionar (a
-  mais provável, com base no servidor da conexão atual, vem marcada com ★).
-  Não precisa mais catar id manualmente em nenhum dos dois sistemas. Venda de
-  uma loja sem linha correspondente aqui é ignorada (e logada) em vez de cair
-  na loja errada.
+- **Mapeamento de lojas**: uma linha por loja do Link Pro, ligando o código
+  real dessa loja (vindo de `dados_empresa.codigo_loja`) a uma das nossas
+  lojas. O lado "Ferro Cianorte" já vem como uma lista pra escolher (nada de
+  decorar id) — e o botão **"Buscar lojas no Link Pro"** já traz a loja desta
+  conexão pronta (marcada com ★, exatamente igual à tela "Dados da Empresa →
+  Lojas" do Link Pro) mais as outras lojas conhecidas, como botões prontos
+  pra clicar e adicionar. Venda de uma loja sem linha correspondente aqui é
+  ignorada (e logada) em vez de cair na loja errada.
 - **Formas de pagamento**: qual código o Link Pro usa pra cada forma nossa
   (ex.: "D" para Dinheiro), baseado nos atalhos vistos na tela do Link Pro.
 
