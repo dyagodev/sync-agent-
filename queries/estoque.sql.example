@@ -1,6 +1,7 @@
--- AJUSTE AQUI: troque pela tabela real de estoque do Link Pro. Esta query é
--- opcional — se o arquivo "estoque.sql" (sem .example) não existir, o agente
--- simplesmente não sincroniza estoque, só vendas.
+-- Baseado no schema real confirmado do InkDB (Link Pro / Cervantes) em
+-- 2026-07-09. Esta query é opcional — se o arquivo "estoque.sql" (sem
+-- .example) não existir, o agente simplesmente não sincroniza estoque, só
+-- vendas.
 --
 -- Serve pra pegar ajustes de estoque feitos SEM venda (contagem manual,
 -- balança, correção, entrada de mercadoria lançada direto no Link Pro etc.),
@@ -9,20 +10,27 @@
 -- Contrato que o agente espera desta query (não pode mudar os apelidos):
 --   loja_externa    -> identificador da loja/filial no Link Pro
 --   codigo_barras   -> usado para casar com o produto cadastrado no Ferro Cianorte
---   quantidade      -> quantidade ATUAL em estoque (valor absoluto, não delta) —
---                       o agente simplesmente define esse valor no Ferro Cianorte,
---                       sobrescrevendo o que estiver lá, pra nunca ficar com furo.
+--   quantidade      -> quantidade ATUAL em estoque (valor absoluto, não delta)
 --   atualizado_em   -> timestamp da última atualização desse registro de estoque
 --
--- O parâmetro $1 é o timestamp da última verificação (época Unix 0 na primeira
--- execução, ou seja: a primeira rodada traz o estoque inteiro).
+-- "produto.qtd_estoque" guarda o valor atual mas não tem coluna de "última
+-- atualização". Quem tem isso é "log_produto_qtd_estoque": um registro
+-- histórico toda vez que qtd_estoque muda, seja por venda ou por ajuste
+-- manual — exatamente o que precisamos. "qtd_estoque_novo" já é o valor
+-- final depois da mudança.
+--
+-- Mesma observação de vendas.sql sobre loja_externa ser fixo (schema real
+-- sem coluna de loja — provável um Postgres por loja, ver README).
+--
+-- O parâmetro $1 é o timestamp da última verificação (época Unix 0 na
+-- primeira execução, ou seja: a primeira rodada traz o estoque inteiro).
 select
-  e.loja_id         as loja_externa,
-  p.codigo_barras   as codigo_barras,
-  e.quantidade      as quantidade,
-  e.atualizado_em   as atualizado_em
-from estoque e
-join produtos p on p.id = e.produto_id
-where e.atualizado_em > $1
-order by e.atualizado_em asc
+  '1'                as loja_externa,
+  p.cean             as codigo_barras,
+  l.qtd_estoque_novo as quantidade,
+  l.data_hora        as atualizado_em
+from log_produto_qtd_estoque l
+join produto p on p.id_produto = l.id_produto
+where l.data_hora > $1
+order by l.data_hora asc
 limit 500;

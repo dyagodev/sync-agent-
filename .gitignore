@@ -5,3 +5,6 @@ queries/vendas.sql
 queries/itens.sql
 queries/pagamentos.sql
 logs
+queries/estoque.sql
+estrutura-banco-*.txt
+estrutura-banco-*.json

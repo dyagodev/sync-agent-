@@ -27,38 +27,60 @@ tela de vendas/relatórios.
    no Link Pro) — e sobrescreve a quantidade correspondente no Ferro Cianorte,
    pra nunca ficar com furo entre os dois sistemas.
 
-## ⚠️ O schema do Link Pro ainda não foi confirmado
+## ✅ Schema do Link Pro confirmado (banco "InkDB")
 
-As queries em `queries/*.sql.example` são um **chute razoável**, não o schema
-real — o banco do Link Pro é privado, sem acesso direto de quem está
-adaptando este agente. Pra resolver isso sem precisar de um DBA nem de acesso
-remoto ao banco:
+Em 2026-07-09 rodamos o **"Gerar log da estrutura do banco"** contra o
+Postgres real do Link Pro (banco chamado `InkDB`, 380 tabelas). As queries em
+`queries/vendas.sql`, `itens.sql`, `pagamentos.sql` e `estoque.sql` já estão
+escritas pra esse schema real (não são mais `.sql.example` chutados) — ficam
+fora do git (`.gitignore`) por conterem nomes específicos dessa instalação,
+mas o texto de cada uma documenta as tabelas/colunas usadas. Resumo do que
+foi descoberto:
 
-### Gerando o log da estrutura do banco
+- **`negociacao`** é a tabela de vendas (`venda = true` filtra venda de
+  orçamento). **`negociacao_item_vendido`** são os itens vendidos, ligados por
+  `id_negociacao`. **`negociacao_parcela`** são as formas de pagamento, com
+  `forma_pagamento` já em texto (`"Dinheiro"`, `"Pix"`, `"Cartao"`...).
+- **`produto.cean`** é o código de barras (não confundir com
+  `produto_codigo`, que é só o código interno do Link Pro).
+- **`log_produto_qtd_estoque`** é um histórico de toda mudança de estoque
+  (venda ou ajuste manual/balanço) com timestamp — é o que `estoque.sql` usa
+  pra sincronização incremental.
 
-Na janela de configuração (`http://localhost:4848`), preencha os campos do
-"Postgres de origem" e clique em **"Gerar log da estrutura do banco"**. Isso
-conecta no Postgres do Link Pro (só leitura, via `information_schema`) e lista
-todas as tabelas e colunas com tipo, obrigatoriedade e valor padrão — sem
-precisar salvar a configuração antes. O resultado aparece na tela e também é
-salvo em `logs/estrutura-banco-<data>.txt` (e um `.json` com os mesmos dados).
-Tabelas cujo nome bate com palavras como "venda", "item", "pagamento",
-"estoque", "produto", "cliente", "fornecedor" ou "loja" ficam marcadas com ★
-no topo do log, pra facilitar achar as relevantes num banco com muitas tabelas.
+### ⚠️ Achado importante: provavelmente um Postgres por loja
 
-Quem estiver na loja com acesso ao Postgres do Link Pro roda isso uma vez,
-manda o arquivo `.txt` (ou cola o conteúdo) pra quem for adaptar as queries —
-não precisa mais adivinhar nomes de tabela/coluna nem pedir acesso direto ao
-banco.
+Não existe coluna de loja/filial em `negociacao`, `produto`, `cliente` nem
+`caixa`. O único rastro de multiloja é a tabela `dados_empresa_loja` (uma
+linha por loja, cada uma com `servidor`/`porta` próprios) e `fdw_loja`
+(*foreign data wrapper* — mecanismo do Postgres pra consultar outro servidor
+remotamente). Tudo indica que **cada loja roda seu próprio banco Postgres**, e
+uma instância do agente só enxerga o banco de uma loja por vez.
 
-1. Copie os arquivos `.sql.example` para `.sql` (sem o `.example`) e ajuste
-   nomes de tabela/coluna com base no log gerado, mantendo os apelidos de
-   coluna exigidos (documentados em cada arquivo, ex: `as id`, `as loja_externa`,
-   `as venda_id`...).
-   `vendas.sql`, `itens.sql` e `pagamentos.sql` são obrigatórios; `estoque.sql`
-   é opcional (sem ele, o agente só sincroniza vendas, não ajustes manuais).
-2. Os arquivos `.sql` (sem `.example`) ficam fora do git (`.gitignore`) porque
-   são específicos de cada instalação do Link Pro.
+Por isso `vendas.sql` e `estoque.sql` retornam um `loja_externa` **fixo**
+(`'1'`), não vindo de coluna nenhuma. Na prática:
+
+- Rode **uma instância do agente por loja** (cada uma configurada com o
+  `SOURCE_PG_HOST`/porta do servidor daquela loja).
+- Em cada instância, o "Mapeamento de lojas" só precisa de **uma linha**:
+  o valor fixo da query (`1`) apontando pra loja certa do Ferro Cianorte.
+- Se isso se confirmar errado (ex: as lojas na verdade compartilham o mesmo
+  servidor via FDW), rode de novo o "Gerar log da estrutura do banco" — a
+  seção "Amostras de dados" no log mostra o conteúdo de `dados_empresa_loja`
+  com o `servidor` de cada loja, o que confirma ou derruba essa hipótese.
+
+### Se precisar readaptar (outra instalação, versão diferente do Link Pro)
+
+1. Rode **"Gerar log da estrutura do banco"** na janela de configuração — sem
+   precisar salvar a config antes nem ter acesso direto ao banco por fora.
+   O resultado aparece na tela e fica salvo em
+   `logs/estrutura-banco-<data>.txt` (+ `.json`), com tabelas relevantes
+   marcadas com ★ e uma seção de amostra de dados (lojas cadastradas, formas
+   de pagamento reais usadas) pra tirar dúvidas que a estrutura sozinha não
+   responde.
+2. Copie `queries/*.sql.example` para `.sql` (sem `.example`) e ajuste nomes
+   de tabela/coluna com base no log, mantendo os apelidos exigidos (`as id`,
+   `as loja_externa`, `as venda_id`...). `vendas.sql`, `itens.sql` e
+   `pagamentos.sql` são obrigatórios; `estoque.sql` é opcional.
 
 ## Instalação no Windows (recomendado — máquina do Link Pro)
 
@@ -130,9 +152,14 @@ Abra `http://localhost:4848` e preencha:
 - **Comportamento**: intervalo entre verificações e a porta desta própria
   janela.
 - **Mapeamento de lojas**: uma linha por loja do Link Pro, ligando o
-  código/id que ele usa pra cada uma das nossas lojas. Dá pra adicionar quantas
-  linhas forem necessárias ("+ adicionar loja") — uma venda de uma loja sem
-  linha correspondente aqui é ignorada (e logada) em vez de cair na loja errada.
+  código/id que ele usa pra cada uma das nossas lojas. O lado "Ferro Cianorte"
+  já vem como uma lista pra escolher (nada de decorar id) — e o botão
+  **"Buscar lojas no Link Pro"** lê a tabela `dados_empresa_loja` de lá e
+  mostra as lojas encontradas como botões prontos pra clicar e adicionar (a
+  mais provável, com base no servidor da conexão atual, vem marcada com ★).
+  Não precisa mais catar id manualmente em nenhum dos dois sistemas. Venda de
+  uma loja sem linha correspondente aqui é ignorada (e logada) em vez de cair
+  na loja errada.
 - **Formas de pagamento**: qual código o Link Pro usa pra cada forma nossa
   (ex.: "D" para Dinheiro), baseado nos atalhos vistos na tela do Link Pro.
 

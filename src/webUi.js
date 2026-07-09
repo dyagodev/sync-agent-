@@ -2,7 +2,7 @@ const http = require("node:http");
 const { carregarConfig, estaConfigurado } = require("./config");
 const { lerEnvSalvo, salvarEnv } = require("./configStore");
 const { listarLojas } = require("./ferroCianorteApi");
-const { testarConexao } = require("./sourceDb");
+const { testarConexao, buscarLojasLinkPro } = require("./sourceDb");
 const { gerarLogEstrutura } = require("./schemaInspector");
 
 const FORMAS_PAGAMENTO_FERRO_CIANORTE = [
@@ -27,24 +27,29 @@ function campo(rotulo, name, valor, { tipo = "text", ajuda = "" } = {}) {
     </label>`;
 }
 
-function linhaMapaLoja(origem = "", destino = "") {
+function opcoesLojasFerroCianorte(lojasFerroCianorte, selecionadoId) {
+  const opcoesVazias = `<option value="">selecione a loja...</option>`;
+  const opcoes = lojasFerroCianorte
+    .map((loja) => `<option value="${loja.id}" ${String(loja.id) === String(selecionadoId) ? "selected" : ""}>${escaparHtml(loja.nome)}</option>`)
+    .join("");
+  return opcoesVazias + opcoes;
+}
+
+function linhaMapaLoja(origem = "", destino = "", lojasFerroCianorte = []) {
   return `
     <div class="linha-loja">
       <input type="text" name="loja_origem[]" value="${escaparHtml(origem)}" placeholder="código/id da loja no Link Pro" />
       <span>→</span>
-      <input type="number" name="loja_destino[]" value="${escaparHtml(destino)}" placeholder="id da loja no Ferro Cianorte" />
+      <select name="loja_destino[]">${opcoesLojasFerroCianorte(lojasFerroCianorte, destino)}</select>
       <button type="button" class="remover" onclick="this.parentElement.remove()">✕</button>
     </div>`;
 }
 
-async function referenciaLojas() {
-  try {
-    const lojas = await listarLojas();
-    if (lojas.length === 0) return "<small>Nenhuma loja cadastrada ainda no Ferro Cianorte.</small>";
-    return `<small>Suas lojas cadastradas: ${lojas.map((l) => `#${l.id} ${escaparHtml(l.nome)}`).join(" · ")}</small>`;
-  } catch {
-    return '<small>Não foi possível carregar a lista de lojas agora (salve a API/credenciais e recarregue esta página).</small>';
+async function referenciaLojas(lojasFerroCianorte) {
+  if (lojasFerroCianorte.length === 0) {
+    return '<small>Não foi possível carregar suas lojas agora (salve a API/credenciais e recarregue esta página) — o campo abaixo vai pedir o id manualmente.</small>';
   }
+  return `<small>Suas lojas cadastradas: ${lojasFerroCianorte.map((l) => `#${l.id} ${escaparHtml(l.nome)}`).join(" · ")}</small>`;
 }
 
 async function paginaHtml({ salvo = false } = {}) {
@@ -60,6 +65,7 @@ async function paginaHtml({ salvo = false } = {}) {
     codigoPorForma[formaNossa] = codigoOrigem;
   }
 
+  const lojasFerroCianorte = await listarLojas().catch(() => []);
   const linhasLojas = Object.entries(config.mapaLojas);
 
   return `<!doctype html>
@@ -144,13 +150,16 @@ async function paginaHtml({ salvo = false } = {}) {
     </div>
 
     <h2>Mapeamento de lojas</h2>
-    ${await referenciaLojas()}
+    ${await referenciaLojas(lojasFerroCianorte)}
     <br /><br />
     <small>O Link Pro é multiloja: diga qual id/código de loja ele usa pra cada uma das nossas lojas.</small>
     <div id="linhas-lojas">
-      ${linhasLojas.length > 0 ? linhasLojas.map(([origem, destino]) => linhaMapaLoja(origem, destino)).join("") : linhaMapaLoja()}
+      ${linhasLojas.length > 0 ? linhasLojas.map(([origem, destino]) => linhaMapaLoja(origem, destino, lojasFerroCianorte)).join("") : linhaMapaLoja("", "", lojasFerroCianorte)}
     </div>
     <button type="button" class="adicionar" onclick="adicionarLinhaLoja()">+ adicionar loja</button>
+    <button type="button" class="secundario" onclick="buscarLojasLinkPro()">Buscar lojas no Link Pro</button>
+    <div id="resultado-lojas-linkpro"></div>
+    <div id="lojas-linkpro-encontradas"></div>
 
     <h2>Formas de pagamento</h2>
     <small>Qual código o Link Pro usa para cada forma de pagamento nossa (deixe em branco se não existir).</small><br /><br />
@@ -166,15 +175,81 @@ async function paginaHtml({ salvo = false } = {}) {
   </form>
 
   <script>
-    function adicionarLinhaLoja() {
+    const LOJAS_FERRO_CIANORTE = ${JSON.stringify(lojasFerroCianorte).replace(/</g, "\\u003c")};
+
+    function opcoesLojasHtml(selecionadoId) {
+      let html = '<option value="">selecione a loja...</option>';
+      for (const loja of LOJAS_FERRO_CIANORTE) {
+        const selecionado = String(loja.id) === String(selecionadoId) ? "selected" : "";
+        html += '<option value="' + loja.id + '" ' + selecionado + '>' + loja.nome + '</option>';
+      }
+      return html;
+    }
+
+    function adicionarLinhaLoja(origemPreenchida) {
       const container = document.getElementById("linhas-lojas");
       const div = document.createElement("div");
       div.className = "linha-loja";
-      div.innerHTML = '<input type="text" name="loja_origem[]" placeholder="código/id da loja no Link Pro" />' +
+      div.innerHTML = '<input type="text" name="loja_origem[]" placeholder="código/id da loja no Link Pro" value="' + (origemPreenchida || "") + '" />' +
         '<span>→</span>' +
-        '<input type="number" name="loja_destino[]" placeholder="id da loja no Ferro Cianorte" />' +
+        '<select name="loja_destino[]">' + opcoesLojasHtml() + '</select>' +
         '<button type="button" class="remover" onclick="this.parentElement.remove()">✕</button>';
       container.appendChild(div);
+      return div;
+    }
+
+    async function buscarLojasLinkPro() {
+      const form = document.querySelector("form");
+      const dados = Object.fromEntries(new FormData(form).entries());
+      const resultado = document.getElementById("resultado-lojas-linkpro");
+      const areaEncontradas = document.getElementById("lojas-linkpro-encontradas");
+      resultado.textContent = "Buscando lojas no Link Pro...";
+      resultado.style.color = "#475569";
+      areaEncontradas.innerHTML = "";
+
+      try {
+        const resposta = await fetch("/lojas-link-pro", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            host: dados.SOURCE_PG_HOST,
+            port: dados.SOURCE_PG_PORT,
+            database: dados.SOURCE_PG_DATABASE,
+            user: dados.SOURCE_PG_USER,
+            password: dados.SOURCE_PG_PASSWORD,
+            ssl: dados.SOURCE_PG_SSL === "true",
+          }),
+        });
+        const corpo = await resposta.json();
+
+        if (!corpo.ok) {
+          resultado.textContent = "✗ " + corpo.erro;
+          resultado.style.color = "#b91c1c";
+          return;
+        }
+
+        if (corpo.lojas.length === 0) {
+          resultado.textContent = "Não achei a tabela de lojas nesse Link Pro (ou ela está vazia) — preencha manualmente.";
+          resultado.style.color = "#854d0e";
+          return;
+        }
+
+        resultado.textContent = corpo.lojas.length + " loja(s) encontrada(s). Clique pra adicionar ao mapeamento:";
+        resultado.style.color = "#166534";
+
+        for (const loja of corpo.lojas) {
+          const botao = document.createElement("button");
+          botao.type = "button";
+          botao.className = "adicionar";
+          botao.style.marginRight = "6px";
+          botao.textContent = (loja.provavelEsta ? "★ " : "") + loja.nome + " (id " + loja.id + ")";
+          botao.onclick = () => adicionarLinhaLoja(loja.id);
+          areaEncontradas.appendChild(botao);
+        }
+      } catch (erro) {
+        resultado.textContent = "✗ " + erro.message;
+        resultado.style.color = "#b91c1c";
+      }
     }
 
     async function testarPostgres() {
@@ -321,6 +396,19 @@ function iniciarWebUi(log) {
               totalTabelas: resultado.totalTabelas,
             }),
           );
+        } catch (erro) {
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ ok: false, erro: erro.message }));
+        }
+        return;
+      }
+
+      if (request.method === "POST" && request.url === "/lojas-link-pro") {
+        const corpo = JSON.parse(await lerCorpo(request));
+        try {
+          const lojas = await buscarLojasLinkPro(corpo);
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ ok: true, lojas }));
         } catch (erro) {
           response.writeHead(200, { "Content-Type": "application/json" });
           response.end(JSON.stringify({ ok: false, erro: erro.message }));

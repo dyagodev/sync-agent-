@@ -1,17 +1,23 @@
--- AJUSTE AQUI: troque pelos nomes reais das tabelas de item de venda e produto.
+-- Baseado no schema real confirmado do InkDB (Link Pro / Cervantes) em
+-- 2026-07-09. Ajuste se a sua instalação for diferente.
 --
 -- Contrato que o agente espera desta query:
 --   venda_id       -> deve bater com o "id" retornado em vendas.sql
 --   codigo_barras  -> usado para casar com o produto já cadastrado no Ferro Cianorte
 --   quantidade     -> numérico
---   preco_unitario -> preço efetivamente cobrado no item (não o preço de tabela)
+--   preco_unitario -> preço efetivamente cobrado no item (já com desconto aplicado)
+--
+-- "negociacao_item_vendido" é a tabela de itens vendidos de verdade (existe
+-- também "negociacao_item_devolvido" pra devoluções, não tratado aqui).
+-- "produto.cean" é o código de barras — "produto_codigo" é só o código
+-- interno do Link Pro, não confundir os dois.
 --
 -- O parâmetro $1 é um array com os ids de venda do lote atual.
 select
-  iv.venda_id        as venda_id,
-  p.codigo_barras    as codigo_barras,
-  iv.quantidade      as quantidade,
-  iv.preco_unitario  as preco_unitario
-from itens_venda iv
-join produtos p on p.id = iv.produto_id
-where iv.venda_id = any($1::bigint[]);
+  iv.id_negociacao as venda_id,
+  p.cean           as codigo_barras,
+  iv.qtd           as quantidade,
+  round(iv.preco_bruto_unitario * (1 - iv.desconto_percentual / 100.0), 2) as preco_unitario
+from negociacao_item_vendido iv
+join produto p on p.id_produto = iv.id_produto
+where iv.id_negociacao = any($1::bigint[]);

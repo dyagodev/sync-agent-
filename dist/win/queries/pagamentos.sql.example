@@ -1,15 +1,20 @@
--- AJUSTE AQUI: troque pela tabela real de formas de pagamento da venda.
+-- Baseado no schema real confirmado do InkDB (Link Pro / Cervantes) em
+-- 2026-07-09. Ajuste se a sua instalação for diferente.
 --
 -- Contrato que o agente espera desta query:
---   venda_id       -> deve bater com o "id" retornado em vendas.sql
---   forma_pagamento -> código bruto do sistema de origem (ex: "D", "C", "P"...),
---                       o agente traduz isso pro nosso enum usando MAPA_FORMAS_PAGAMENTO no .env
---   valor          -> valor pago nessa forma
+--   venda_id         -> deve bater com o "id" retornado em vendas.sql
+--   forma_pagamento  -> texto bruto do sistema de origem (ex: "Dinheiro",
+--                        "Pix", "Cartao"...), o agente traduz isso pro nosso
+--                        enum usando MAPA_FORMAS_PAGAMENTO no .env
+--   valor            -> valor pago nessa forma
+--
+-- "negociacao_parcela" já traz forma_pagamento como texto, não código
+-- numérico — bem mais direto de mapear que um código arbitrário.
 --
 -- O parâmetro $1 é um array com os ids de venda do lote atual.
 select
-  fp.venda_id         as venda_id,
-  fp.forma_pagamento  as forma_pagamento,
-  fp.valor            as valor
-from vendas_formas_pagamento fp
-where fp.venda_id = any($1::bigint[]);
+  np.id_negociacao   as venda_id,
+  np.forma_pagamento as forma_pagamento,
+  np.valor           as valor
+from negociacao_parcela np
+where np.id_negociacao = any($1::bigint[]);

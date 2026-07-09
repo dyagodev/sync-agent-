@@ -72,10 +72,40 @@ async function inspecionarEsquema(dadosConexao) {
       });
     }
 
-    return [...tabelas.values()];
+    const amostras = await coletarAmostras(client);
+
+    return { tabelas: [...tabelas.values()], amostras };
   } finally {
     await client.end().catch(() => undefined);
   }
+}
+
+/**
+ * Roda algumas consultas pequenas e específicas em tabelas que costumam
+ * responder perguntas que a estrutura sozinha não responde (ex: quais textos
+ * de forma de pagamento existem de verdade, quantas "lojas" o banco conhece).
+ * Cada uma é isolada e tolera a tabela/coluna não existir (schemas variam).
+ */
+async function coletarAmostras(client) {
+  const amostras = {};
+
+  async function tentar(chave, sql) {
+    try {
+      const { rows } = await client.query(sql);
+      amostras[chave] = rows;
+    } catch {
+      // tabela/coluna não existe nesse banco — ignora, não é erro fatal.
+    }
+  }
+
+  await tentar("dados_empresa_loja", "select * from dados_empresa_loja limit 20");
+  await tentar(
+    "forma_pagamento_negociacao_parcela",
+    "select forma_pagamento, count(*) as qtd from negociacao_parcela group by 1 order by 2 desc limit 20",
+  );
+  await tentar("config_forma_pagamento", "select * from config_forma_pagamento limit 5");
+
+  return amostras;
 }
 
 function tabelaParecerelevante(nomeTabela) {
@@ -83,7 +113,7 @@ function tabelaParecerelevante(nomeTabela) {
   return PALAVRAS_CHAVE.some((palavra) => nome.includes(palavra));
 }
 
-function formatarLogTexto(tabelas, dadosConexao) {
+function formatarLogTexto(tabelas, amostras, dadosConexao) {
   const linhas = [];
   const agora = new Date().toISOString();
 
@@ -96,6 +126,20 @@ function formatarLogTexto(tabelas, dadosConexao) {
   if (relevantes.length > 0) {
     linhas.push("Tabelas que provavelmente interessam (nome bate com venda/item/pagamento/estoque/produto/cliente/fornecedor/loja):");
     linhas.push(`  ${relevantes.join(", ")}`);
+    linhas.push("");
+  }
+
+  if (Object.keys(amostras).length > 0) {
+    linhas.push("--- Amostras de dados (contexto extra pra tirar dúvidas específicas) ---");
+    for (const [chave, linhasAmostra] of Object.entries(amostras)) {
+      linhas.push(`  ${chave}:`);
+      if (linhasAmostra.length === 0) {
+        linhas.push("    (nenhuma linha)");
+      }
+      for (const linha of linhasAmostra) {
+        linhas.push(`    ${JSON.stringify(linha)}`);
+      }
+    }
     linhas.push("");
   }
 
@@ -121,8 +165,8 @@ function formatarLogTexto(tabelas, dadosConexao) {
  * bruto), em <diretorio-do-agente>/logs/. Devolve o texto e o caminho salvo.
  */
 async function gerarLogEstrutura(dadosConexao) {
-  const tabelas = await inspecionarEsquema(dadosConexao);
-  const texto = formatarLogTexto(tabelas, dadosConexao);
+  const { tabelas, amostras } = await inspecionarEsquema(dadosConexao);
+  const texto = formatarLogTexto(tabelas, amostras, dadosConexao);
 
   const pastaLogs = path.join(obterDiretorioBase(), "logs");
   fs.mkdirSync(pastaLogs, { recursive: true });
@@ -132,7 +176,7 @@ async function gerarLogEstrutura(dadosConexao) {
   const caminhoJson = path.join(pastaLogs, `estrutura-banco-${carimbo}.json`);
 
   fs.writeFileSync(caminhoTexto, texto);
-  fs.writeFileSync(caminhoJson, JSON.stringify(tabelas, null, 2));
+  fs.writeFileSync(caminhoJson, JSON.stringify({ tabelas, amostras }, null, 2));
 
   return { texto, caminhoTexto, caminhoJson, totalTabelas: tabelas.length };
 }

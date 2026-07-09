@@ -94,6 +94,47 @@ async function testarConexao(dadosConexao) {
   }
 }
 
+/**
+ * Busca as lojas cadastradas no Link Pro (tabela dados_empresa_loja), pra
+ * facilitar preencher o mapeamento de lojas na janela de configuração sem
+ * precisar abrir o Link Pro pra descobrir nome/id de cada uma. Devolve []
+ * se essa tabela não existir nessa instalação (recurso best-effort).
+ *
+ * Também marca qual loja "provavelmente é essa" comparando o campo
+ * "servidor" de cada linha com o host que o usuário está usando pra
+ * conectar — no schema real cada loja tem seu próprio servidor Postgres, e
+ * bater esse valor ajuda a identificar automaticamente qual delas é esta.
+ */
+async function buscarLojasLinkPro(dadosConexao) {
+  const client = new pg.Client({
+    host: dadosConexao.host,
+    port: Number(dadosConexao.port),
+    database: dadosConexao.database,
+    user: dadosConexao.user,
+    password: dadosConexao.password,
+    ssl: dadosConexao.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+
+  await client.connect();
+
+  try {
+    const { rows } = await client.query(
+      "select id_dados_empresa_loja, descricao, nome_fantasia, servidor from dados_empresa_loja order by id_dados_empresa_loja",
+    );
+
+    return rows.map((loja) => ({
+      id: String(loja.id_dados_empresa_loja),
+      nome: loja.nome_fantasia || loja.descricao || `Loja ${loja.id_dados_empresa_loja}`,
+      provavelEsta: loja.servidor === dadosConexao.host,
+    }));
+  } catch {
+    return [];
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 async function encerrarConexao() {
   if (pool) {
     await pool.end();
@@ -101,4 +142,10 @@ async function encerrarConexao() {
   }
 }
 
-module.exports = { buscarVendasNovas, buscarEstoqueAtualizado, testarConexao, encerrarConexao };
+module.exports = {
+  buscarVendasNovas,
+  buscarEstoqueAtualizado,
+  testarConexao,
+  buscarLojasLinkPro,
+  encerrarConexao,
+};
