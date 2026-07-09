@@ -1,0 +1,21 @@
+-- AJUSTE AQUI: troque "vendas" e as colunas abaixo pelos nomes reais do banco
+-- do Link Pro assim que você tiver acesso a ele. Este é um chute razoável
+-- baseado em sistemas de PDV parecidos, não é o schema confirmado.
+--
+-- Contrato que o agente espera desta query (não pode mudar os apelidos das colunas):
+--   id           -> identificador único e crescente da venda no sistema de origem
+--   data_hora    -> timestamp da venda
+--   loja_externa -> identificador da loja/filial dessa venda no Link Pro (o Link
+--                    Pro é multiloja: esse valor é o que a janela de configuração
+--                    usa pra saber em qual das nossas lojas registrar a venda)
+--
+-- O parâmetro $1 é o id da última venda já processada (0 na primeira execução).
+select
+  v.id            as id,
+  v.data_emissao  as data_hora,
+  v.loja_id       as loja_externa
+from vendas v
+where v.id > $1
+  and v.situacao = 'F' -- ex: só vendas fechadas/finalizadas, ajuste ao valor real
+order by v.id asc
+limit 200;
