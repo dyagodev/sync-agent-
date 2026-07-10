@@ -1,20 +1,28 @@
 -- Baseado no schema real confirmado do InkDB (Link Pro / Cervantes) em
--- 2026-07-09. Ajuste se a sua instalação for diferente.
+-- 2026-07-09, corrigido em 2026-07-10 depois de confirmar com dados reais
+-- desta instalação que "negociacao_parcela" está VAZIA aqui (o Link Pro
+-- registra pagamento em outro lugar nesta versão/config) — toda venda
+-- sincronizada estava caindo no fallback "dinheiro" do agente por não achar
+-- nenhuma linha em negociacao_parcela.
 --
 -- Contrato que o agente espera desta query:
 --   venda_id         -> deve bater com o "id" retornado em vendas.sql
 --   forma_pagamento  -> texto bruto do sistema de origem (ex: "Dinheiro",
---                        "Pix", "Cartao"...), o agente traduz isso pro nosso
+--                        "PIX", "Cartão"...), o agente traduz isso pro nosso
 --                        enum usando MAPA_FORMAS_PAGAMENTO no .env
 --   valor            -> valor pago nessa forma
 --
--- "negociacao_parcela" já traz forma_pagamento como texto, não código
--- numérico — bem mais direto de mapear que um código arbitrário.
+-- "vw_formas_pagamento_por_estacao" é a view que realmente tem os dados
+-- (confirmado consultando direto: "Dinheiro", "PIX", "Cartão" com
+-- milhares de registros cada) — ela guarda descricao_fp/valor por
+-- id_caixa, não por venda direto, então precisa do join com "caixa" pra
+-- chegar em id_negociacao.
 --
 -- O parâmetro $1 é um array com os ids de venda do lote atual.
 select
-  np.id_negociacao   as venda_id,
-  np.forma_pagamento as forma_pagamento,
-  np.valor           as valor
-from negociacao_parcela np
-where np.id_negociacao = any($1::bigint[]);
+  c.id_negociacao as venda_id,
+  v.descricao_fp   as forma_pagamento,
+  v.valor          as valor
+from vw_formas_pagamento_por_estacao v
+join caixa c on c.id_caixa = v.id_caixa
+where c.id_negociacao = any($1::bigint[]);

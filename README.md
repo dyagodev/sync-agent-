@@ -49,8 +49,12 @@ foi descoberto:
 
 - **`negociacao`** é a tabela de vendas (`venda = true` filtra venda de
   orçamento). **`negociacao_item_vendido`** são os itens vendidos, ligados por
-  `id_negociacao`. **`negociacao_parcela`** são as formas de pagamento, com
-  `forma_pagamento` já em texto (`"Dinheiro"`, `"Pix"`, `"Cartao"`...).
+  `id_negociacao`.
+- **Formas de pagamento**: `negociacao_parcela` existe no schema mas está
+  **vazia** nesta instalação — os pagamentos de verdade ficam em
+  `vw_formas_pagamento_por_estacao` (`descricao_fp`/`valor`, ligado por
+  `id_caixa` — precisa de join com `caixa` pra chegar em `id_negociacao`).
+  Confirmado com dados reais: `"Dinheiro"`, `"PIX"`, `"Cartão"`.
 - **`produto.produto_codigo`** é o código interno do Link Pro (a etiqueta que
   a própria loja gera) — é ele que usamos pra casar produto, não
   `produto.cean` (código de barras de fábrica, que muita peça solta de

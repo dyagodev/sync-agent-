@@ -145,7 +145,7 @@ async function paginaHtml({ salvo = false } = {}) {
       (forma) => `
       <div class="linha-pagamento">
         <span>${forma.rotulo}</span>
-        <input type="text" name="forma_${forma.valor}" value="${escaparHtml(codigoPorForma[forma.valor] ?? "")}" placeholder="ex: D" />
+        <input type="text" name="forma_${forma.valor}" value="${escaparHtml(codigoPorForma[forma.valor] ?? "")}" placeholder="ex: Dinheiro" />
       </div>`,
     ).join("")}
     <button type="button" class="secundario" onclick="buscarFormasPagamentoLinkPro()">Ver formas de pagamento usadas no Link Pro</button>
