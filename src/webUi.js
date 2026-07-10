@@ -12,6 +12,8 @@ const FORMAS_PAGAMENTO_FERRO_CIANORTE = [
   { valor: "boleto", rotulo: "Boleto" },
   { valor: "cheque", rotulo: "Cheque" },
   { valor: "crediario", rotulo: "Crediário" },
+  { valor: "a_prazo", rotulo: "A Prazo" },
+  { valor: "outros", rotulo: "Outros" },
 ];
 
 function escaparHtml(valor = "") {
