@@ -1,6 +1,6 @@
 {
   "name": "ferro-cianorte-sync-agent",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Agente que monitora o Postgres do Link Pro (Cervantes) e replica as vendas no Ferro Cianorte.",
   "main": "src/index.js",

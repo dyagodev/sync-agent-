@@ -8,6 +8,12 @@
 --   id           -> identificador único e crescente da venda
 --   data_hora    -> timestamp da venda
 --   loja_externa -> identificador da loja dessa venda
+--   valor_total  -> valor final da venda, já com desconto/acréscimo da
+--                   negociação aplicado (não é a soma bruta dos itens) —
+--                   o agente usa isso pra calcular o desconto real da venda
+--                   (diferença entre a soma dos itens e este valor), porque
+--                   negociacao_item_vendido não reflete desconto dado na
+--                   tela de fechamento da venda, só desconto por item.
 --
 -- IMPORTANTE: no schema real, não existe coluna de loja em "negociacao" —
 -- cada loja roda seu próprio Postgres (confirmado na tela "Dados da Empresa
@@ -24,8 +30,9 @@
 -- do Link Pro (anos de registros), duplicando decremento de estoque de
 -- vendas que já aconteceram há muito tempo.
 select
-  n.id_negociacao as id,
-  n.data          as data_hora,
+  n.id_negociacao     as id,
+  n.data              as data_hora,
+  n.valor_total_venda as valor_total,
   (select codigo_loja::text from dados_empresa limit 1) as loja_externa
 from negociacao n
 where n.id_negociacao > $1

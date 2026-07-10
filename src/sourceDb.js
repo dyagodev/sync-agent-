@@ -49,6 +49,7 @@ async function buscarVendasNovas(ultimoIdProcessado) {
   return vendas.map((venda) => ({
     id: venda.id,
     dataHora: venda.data_hora,
+    valorTotal: venda.valor_total,
     lojaExterna: venda.loja_externa,
     itens: itens.filter((item) => item.venda_id === venda.id),
     pagamentos: pagamentos.filter((pagamento) => pagamento.venda_id === venda.id),
