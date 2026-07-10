@@ -1,5 +1,5 @@
 const { exec } = require("node:child_process");
-const { carregarConfig, estaConfigurado } = require("./config");
+const { carregarConfig, estaConfigurado, itensFaltando } = require("./config");
 const { lerUltimoIdProcessado, salvarUltimoIdProcessado } = require("./checkpoint");
 const { autenticar, carregarMapaProdutos, sincronizarVendas } = require("./ferroCianorteApi");
 const { buscarVendasNovas } = require("./sourceDb");
@@ -70,16 +70,38 @@ async function iniciarSincronizacao() {
   await loopPrincipal();
 }
 
+let sincronizacaoIniciada = false;
+
+/**
+ * Chamada tanto na subida do processo quanto logo depois de salvar a
+ * configuração pela janela do navegador — assim salvar já basta pra começar
+ * a sincronizar, sem precisar fechar e abrir o agente de novo (isso já
+ * causou confusão, parecia que a configuração "não salvava").
+ */
+async function tentarIniciarSincronizacao() {
+  if (sincronizacaoIniciada) return;
+  if (!estaConfigurado(carregarConfig())) return;
+
+  sincronizacaoIniciada = true;
+  try {
+    await iniciarSincronizacao();
+  } catch (erro) {
+    sincronizacaoIniciada = false;
+    log("Não foi possível iniciar a sincronização:", erro.message);
+  }
+}
+
 async function iniciar() {
   const { configUiPort } = carregarConfig();
-  iniciarWebUi(log);
+  iniciarWebUi(log, () => tentarIniciarSincronizacao());
 
-  const config = carregarConfig();
-  if (estaConfigurado(config)) {
-    await iniciarSincronizacao();
+  const configAtual = carregarConfig();
+  if (estaConfigurado(configAtual)) {
+    await tentarIniciarSincronizacao();
   } else {
-    log("Configuração incompleta. Abrindo a janela de configuração no navegador...");
-    log("Depois de salvar, reinicie o agente (feche esta janela e abra o atalho de novo) para iniciar a sincronização.");
+    log("Configuração incompleta. Falta:");
+    for (const item of itensFaltando(configAtual)) log(`  - ${item}`);
+    log("A sincronização começa sozinha assim que a configuração for salva completa.");
     abrirNavegador(`http://localhost:${configUiPort}`);
   }
 }

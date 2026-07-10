@@ -56,22 +56,34 @@ function carregarConfig() {
 }
 
 /**
+ * Lista o que falta preencher/copiar pra sincronização poder começar —
+ * usado tanto pra decidir se já dá pra rodar quanto pra mostrar na janela de
+ * configuração exatamente o que falta (evita o usuário achar que "salvar
+ * não fez nada" quando na real falta, por exemplo, copiar as queries).
+ */
+function itensFaltando(config) {
+  const faltando = [];
+
+  if (!config.source.host) faltando.push("Postgres de origem: Host");
+  if (!config.source.database) faltando.push("Postgres de origem: Banco de dados");
+  if (!config.source.user) faltando.push("Postgres de origem: Usuário");
+  if (!config.api.baseUrl) faltando.push("API do Ferro Cianorte: URL da API");
+  if (!config.api.email) faltando.push("API do Ferro Cianorte: E-mail");
+  if (!config.api.password) faltando.push("API do Ferro Cianorte: Senha");
+  if (Object.keys(config.mapaLojas).length === 0) faltando.push("Mapeamento de lojas");
+  if (!config.queries.vendas) faltando.push("queries/vendas.sql (copie de vendas.sql.example e ajuste ao schema real)");
+  if (!config.queries.itens) faltando.push("queries/itens.sql (copie de itens.sql.example e ajuste ao schema real)");
+  if (!config.queries.pagamentos) faltando.push("queries/pagamentos.sql (copie de pagamentos.sql.example e ajuste ao schema real)");
+
+  return faltando;
+}
+
+/**
  * Diz se já dá pra rodar a sincronização de verdade (todos os campos
  * obrigatórios preenchidos e as 3 queries presentes).
  */
 function estaConfigurado(config) {
-  return Boolean(
-    config.source.host &&
-      config.source.database &&
-      config.source.user &&
-      config.api.baseUrl &&
-      config.api.email &&
-      config.api.password &&
-      Object.keys(config.mapaLojas).length > 0 &&
-      config.queries.vendas &&
-      config.queries.itens &&
-      config.queries.pagamentos,
-  );
+  return itensFaltando(config).length === 0;
 }
 
-module.exports = { carregarConfig, estaConfigurado };
+module.exports = { carregarConfig, estaConfigurado, itensFaltando };

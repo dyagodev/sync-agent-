@@ -1,5 +1,5 @@
 const http = require("node:http");
-const { carregarConfig, estaConfigurado } = require("./config");
+const { carregarConfig, estaConfigurado, itensFaltando } = require("./config");
 const { lerEnvSalvo, salvarEnv } = require("./configStore");
 const { listarLojas } = require("./ferroCianorteApi");
 const { testarConexao, buscarLojasLinkPro } = require("./sourceDb");
@@ -29,30 +29,6 @@ function campo(rotulo, name, valor, { tipo = "text", ajuda = "" } = {}) {
     </label>`;
 }
 
-function opcoesLojasFerroCianorte(lojasFerroCianorte, selecionadoId) {
-  const opcoesVazias = `<option value="">selecione a loja...</option>`;
-  const opcoes = lojasFerroCianorte
-    .map((loja) => `<option value="${loja.id}" ${String(loja.id) === String(selecionadoId) ? "selected" : ""}>${escaparHtml(loja.nome)}</option>`)
-    .join("");
-  return opcoesVazias + opcoes;
-}
-
-function linhaMapaLoja(origem = "", destino = "", lojasFerroCianorte = []) {
-  return `
-    <div class="linha-loja">
-      <input type="text" name="loja_origem[]" value="${escaparHtml(origem)}" placeholder="código/id da loja no Link Pro" />
-      <span>→</span>
-      <select name="loja_destino[]">${opcoesLojasFerroCianorte(lojasFerroCianorte, destino)}</select>
-      <button type="button" class="remover" onclick="this.parentElement.remove()">✕</button>
-    </div>`;
-}
-
-async function referenciaLojas(lojasFerroCianorte) {
-  if (lojasFerroCianorte.length === 0) {
-    return '<small>Não foi possível carregar suas lojas agora (salve a API/credenciais e recarregue esta página) — o campo abaixo vai pedir o id manualmente.</small>';
-  }
-  return `<small>Suas lojas cadastradas: ${lojasFerroCianorte.map((l) => `#${l.id} ${escaparHtml(l.nome)}`).join(" · ")}</small>`;
-}
 
 async function paginaHtml({ salvo = false } = {}) {
   const env = lerEnvSalvo();
@@ -68,7 +44,7 @@ async function paginaHtml({ salvo = false } = {}) {
   }
 
   const lojasFerroCianorte = await listarLojas().catch(() => []);
-  const linhasLojas = Object.entries(config.mapaLojas);
+  const nomePorLojaId = Object.fromEntries(lojasFerroCianorte.map((l) => [String(l.id), l.nome]));
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -86,10 +62,6 @@ async function paginaHtml({ salvo = false } = {}) {
     .linha-pagamento { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
     .linha-pagamento span { width: 90px; font-size: 13px; }
     .linha-pagamento input { flex: 1; }
-    .linha-loja { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .linha-loja input { flex: 1; }
-    .linha-loja span { color: #94a3b8; }
-    .remover { background: none; color: #ef4444; padding: 4px 8px; margin-top: 0; font-size: 16px; line-height: 1; }
     button { background: #2563eb; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 20px; }
     button.secundario { background: #f1f5f9; color: #334155; margin-left: 8px; }
     button.adicionar { background: #f1f5f9; color: #334155; padding: 6px 12px; font-size: 13px; margin-top: 4px; }
@@ -105,10 +77,12 @@ async function paginaHtml({ salvo = false } = {}) {
 <body>
   <h1>Agente de sincronização — Link Pro → Ferro Cianorte</h1>
 
-  ${salvo ? '<div class="status ok">Configuração salva. Reinicie o agente (Ctrl+C e rode de novo) para aplicar.</div>' : ""}
+  ${salvo ? '<div class="status ok">Configuração salva — se estiver completa, a sincronização já começou sozinha (sem precisar reiniciar).</div>' : ""}
   ${
     !configurado
-      ? '<div class="status alerta">Configuração incompleta — a sincronização ainda não está rodando. Preencha os campos abaixo e salve.</div>'
+      ? `<div class="status alerta">Configuração incompleta — a sincronização ainda não está rodando. Falta:<ul style="margin: 6px 0 0; padding-left: 20px;">${itensFaltando(config)
+          .map((item) => `<li>${escaparHtml(item)}</li>`)
+          .join("")}</ul></div>`
       : ""
   }
 
@@ -152,23 +126,17 @@ async function paginaHtml({ salvo = false } = {}) {
     </div>
 
     <h2>Mapeamento de lojas</h2>
-    ${await referenciaLojas(lojasFerroCianorte)}
+    <small>
+      Fixo: loja 1 do Link Pro → loja 1 do Ferro Cianorte${nomePorLojaId["1"] ? ` (${escaparHtml(nomePorLojaId["1"])})` : ""},
+      loja 2 → loja 2${nomePorLojaId["2"] ? ` (${escaparHtml(nomePorLojaId["2"])})` : ""},
+      loja 3 → loja 3${nomePorLojaId["3"] ? ` (${escaparHtml(nomePorLojaId["3"])})` : ""}.
+      Cada instância do agente já sabe sozinha qual é a loja desta conexão
+      (via <code>dados_empresa.codigo_loja</code>) — use o botão abaixo só pra conferir.
+    </small>
     <br /><br />
-    <small>O Link Pro é multiloja: diga qual id/código de loja ele usa pra cada uma das nossas lojas.</small>
-    <div id="linhas-lojas">
-      ${linhasLojas.length > 0 ? linhasLojas.map(([origem, destino]) => linhaMapaLoja(origem, destino, lojasFerroCianorte)).join("") : linhaMapaLoja("", "", lojasFerroCianorte)}
-    </div>
-    <button type="button" class="adicionar" onclick="adicionarLinhaLoja()">+ adicionar loja</button>
-    <button type="button" class="secundario" onclick="buscarLojasLinkPro()">Buscar lojas no Link Pro</button>
+    <button type="button" class="secundario" onclick="buscarLojasLinkPro()">Conferir loja desta conexão no Link Pro</button>
     <div id="resultado-lojas-linkpro"></div>
     <div id="lojas-linkpro-encontradas"></div>
-    <small>
-      Essa busca lê <code>dados_empresa</code> (a loja desta conexão, marcada com ★) e
-      <code>dados_empresa_loja</code> (as outras lojas conhecidas) — exatamente o que aparece
-      na tela "Dados da Empresa → Lojas" do próprio Link Pro. A loja marcada com ★ é o código
-      real usado nas queries (<code>dados_empresa.codigo_loja</code>), então normalmente é só
-      clicar nela e escolher a loja correspondente do Ferro Cianorte no select ao lado.
-    </small>
 
     <h2>Formas de pagamento</h2>
     <small>Qual código o Link Pro usa para cada forma de pagamento nossa (deixe em branco se não existir).</small><br /><br />
@@ -184,29 +152,6 @@ async function paginaHtml({ salvo = false } = {}) {
   </form>
 
   <script>
-    const LOJAS_FERRO_CIANORTE = ${JSON.stringify(lojasFerroCianorte).replace(/</g, "\\u003c")};
-
-    function opcoesLojasHtml(selecionadoId) {
-      let html = '<option value="">selecione a loja...</option>';
-      for (const loja of LOJAS_FERRO_CIANORTE) {
-        const selecionado = String(loja.id) === String(selecionadoId) ? "selected" : "";
-        html += '<option value="' + loja.id + '" ' + selecionado + '>' + loja.nome + '</option>';
-      }
-      return html;
-    }
-
-    function adicionarLinhaLoja(origemPreenchida) {
-      const container = document.getElementById("linhas-lojas");
-      const div = document.createElement("div");
-      div.className = "linha-loja";
-      div.innerHTML = '<input type="text" name="loja_origem[]" placeholder="código/id da loja no Link Pro" value="' + (origemPreenchida || "") + '" />' +
-        '<span>→</span>' +
-        '<select name="loja_destino[]">' + opcoesLojasHtml() + '</select>' +
-        '<button type="button" class="remover" onclick="this.parentElement.remove()">✕</button>';
-      container.appendChild(div);
-      return div;
-    }
-
     async function buscarLojasLinkPro() {
       const form = document.querySelector("form");
       const dados = Object.fromEntries(new FormData(form).entries());
@@ -238,22 +183,21 @@ async function paginaHtml({ salvo = false } = {}) {
         }
 
         if (corpo.lojas.length === 0) {
-          resultado.textContent = "Não achei a tabela de lojas nesse Link Pro (ou ela está vazia) — preencha manualmente.";
+          resultado.textContent = "Não achei a tabela de lojas nesse Link Pro (ou ela está vazia).";
           resultado.style.color = "#854d0e";
           return;
         }
 
-        resultado.textContent = corpo.lojas.length + " loja(s) encontrada(s) (★ = a loja desta conexão). Clique pra adicionar ao mapeamento:";
+        resultado.textContent = corpo.lojas.length + " loja(s) encontrada(s) nesta conexão (★ = a loja desta conexão, deve bater com o número fixo configurado acima):";
         resultado.style.color = "#166534";
 
         for (const loja of corpo.lojas) {
-          const botao = document.createElement("button");
-          botao.type = "button";
-          botao.className = "adicionar";
-          botao.style.marginRight = "6px";
-          botao.textContent = (loja.provavelEsta ? "★ " : "") + loja.nome + " (id " + loja.id + ")";
-          botao.onclick = () => adicionarLinhaLoja(loja.id);
-          areaEncontradas.appendChild(botao);
+          const badge = document.createElement("span");
+          badge.className = "adicionar";
+          badge.style.marginRight = "6px";
+          badge.style.display = "inline-block";
+          badge.textContent = (loja.provavelEsta ? "★ " : "") + loja.nome + " (id " + loja.id + ")";
+          areaEncontradas.appendChild(badge);
         }
       } catch (erro) {
         resultado.textContent = "✗ " + erro.message;
@@ -355,22 +299,17 @@ function montarMapaFormasPagamento(params) {
   return mapa;
 }
 
-function montarMapaLojas(params) {
-  const origens = params.getAll("loja_origem[]");
-  const destinos = params.getAll("loja_destino[]");
-  const mapa = {};
+// Mapeamento fixo: loja 1/2/3 do Link Pro (uma instância do agente por loja,
+// identificada por dados_empresa.codigo_loja) casa direto com a loja 1/2/3
+// do Ferro Cianorte — não depende mais do formulário dinâmico de mapeamento
+// (que tinha se mostrado frágil pra salvar corretamente).
+const MAPA_LOJAS_FIXO = { 1: 1, 2: 2, 3: 3 };
 
-  origens.forEach((origem, indice) => {
-    const destino = destinos[indice];
-    if (origem.trim() && destino) {
-      mapa[origem.trim()] = destino.trim();
-    }
-  });
-
-  return mapa;
+function montarMapaLojas() {
+  return MAPA_LOJAS_FIXO;
 }
 
-function iniciarWebUi(log) {
+function iniciarWebUi(log, aoSalvarConfig) {
   const servidor = http.createServer(async (request, response) => {
     try {
       if (request.method === "GET" && request.url === "/") {
@@ -445,6 +384,10 @@ function iniciarWebUi(log) {
         });
 
         log("Configuração salva pela janela de configuração.");
+        // Tenta começar a sincronizar na hora — sem isso, salvar não tinha
+        // efeito nenhum até reiniciar o processo manualmente, o que já
+        // causou confusão (parecia que "não salvava").
+        aoSalvarConfig?.();
 
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         response.end(await paginaHtml({ salvo: true }));
