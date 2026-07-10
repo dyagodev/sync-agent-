@@ -2,7 +2,7 @@ const http = require("node:http");
 const { carregarConfig, estaConfigurado, itensFaltando } = require("./config");
 const { lerEnvSalvo, salvarEnv } = require("./configStore");
 const { listarLojas } = require("./ferroCianorteApi");
-const { testarConexao, buscarLojasLinkPro } = require("./sourceDb");
+const { testarConexao, buscarLojasLinkPro, buscarFormasPagamentoLinkPro } = require("./sourceDb");
 const { gerarLogEstrutura } = require("./schemaInspector");
 
 const FORMAS_PAGAMENTO_FERRO_CIANORTE = [
@@ -148,6 +148,9 @@ async function paginaHtml({ salvo = false } = {}) {
         <input type="text" name="forma_${forma.valor}" value="${escaparHtml(codigoPorForma[forma.valor] ?? "")}" placeholder="ex: D" />
       </div>`,
     ).join("")}
+    <button type="button" class="secundario" onclick="buscarFormasPagamentoLinkPro()">Ver formas de pagamento usadas no Link Pro</button>
+    <div id="resultado-formas-pagamento"></div>
+    <div id="formas-pagamento-encontradas"></div>
 
     <button type="submit">Salvar configuração</button>
   </form>
@@ -198,6 +201,59 @@ async function paginaHtml({ salvo = false } = {}) {
           badge.style.marginRight = "6px";
           badge.style.display = "inline-block";
           badge.textContent = (loja.provavelEsta ? "★ " : "") + loja.nome + " (id " + loja.id + ")";
+          areaEncontradas.appendChild(badge);
+        }
+      } catch (erro) {
+        resultado.textContent = "✗ " + erro.message;
+        resultado.style.color = "#b91c1c";
+      }
+    }
+
+    async function buscarFormasPagamentoLinkPro() {
+      const form = document.querySelector("form");
+      const dados = Object.fromEntries(new FormData(form).entries());
+      const resultado = document.getElementById("resultado-formas-pagamento");
+      const areaEncontradas = document.getElementById("formas-pagamento-encontradas");
+      resultado.textContent = "Buscando formas de pagamento usadas no Link Pro...";
+      resultado.style.color = "#475569";
+      areaEncontradas.innerHTML = "";
+
+      try {
+        const resposta = await fetch("/formas-pagamento-link-pro", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            host: dados.SOURCE_PG_HOST,
+            port: dados.SOURCE_PG_PORT,
+            database: dados.SOURCE_PG_DATABASE,
+            user: dados.SOURCE_PG_USER,
+            password: dados.SOURCE_PG_PASSWORD,
+            ssl: dados.SOURCE_PG_SSL === "true",
+          }),
+        });
+        const corpo = await resposta.json();
+
+        if (!corpo.ok) {
+          resultado.textContent = "✗ " + corpo.erro;
+          resultado.style.color = "#b91c1c";
+          return;
+        }
+
+        if (corpo.formas.length === 0) {
+          resultado.textContent = "Não achei nenhuma parcela registrada ainda nesse Link Pro (a tabela existe, mas está vazia).";
+          resultado.style.color = "#854d0e";
+          return;
+        }
+
+        resultado.textContent = "Valores encontrados em negociacao_parcela.forma_pagamento — use exatamente esse texto nos campos acima:";
+        resultado.style.color = "#166534";
+
+        for (const forma of corpo.formas) {
+          const badge = document.createElement("span");
+          badge.className = "adicionar";
+          badge.style.marginRight = "6px";
+          badge.style.display = "inline-block";
+          badge.textContent = '"' + forma.formaPagamento + '" (' + forma.quantidade + "x)";
           areaEncontradas.appendChild(badge);
         }
       } catch (erro) {
@@ -358,6 +414,19 @@ function iniciarWebUi(log, aoSalvarConfig) {
           const lojas = await buscarLojasLinkPro(corpo);
           response.writeHead(200, { "Content-Type": "application/json" });
           response.end(JSON.stringify({ ok: true, lojas }));
+        } catch (erro) {
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ ok: false, erro: erro.message }));
+        }
+        return;
+      }
+
+      if (request.method === "POST" && request.url === "/formas-pagamento-link-pro") {
+        const corpo = JSON.parse(await lerCorpo(request));
+        try {
+          const formas = await buscarFormasPagamentoLinkPro(corpo);
+          response.writeHead(200, { "Content-Type": "application/json" });
+          response.end(JSON.stringify({ ok: true, formas }));
         } catch (erro) {
           response.writeHead(200, { "Content-Type": "application/json" });
           response.end(JSON.stringify({ ok: false, erro: erro.message }));

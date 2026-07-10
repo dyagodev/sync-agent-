@@ -160,6 +160,37 @@ async function buscarLojasLinkPro(dadosConexao) {
   return lojas;
 }
 
+/**
+ * Lista os valores de forma de pagamento que aparecem de verdade em
+ * negociacao_parcela (com quantas parcelas usam cada um), pra preencher o
+ * mapeamento de formas de pagamento da janela de configuração sem precisar
+ * adivinhar ou abrir o Link Pro — mostra exatamente o texto bruto salvo lá
+ * (ex.: "Dinheiro", "Pix", "Cartao"), que é o valor esperado em cada campo
+ * "código de origem" da seção "Formas de pagamento".
+ */
+async function buscarFormasPagamentoLinkPro(dadosConexao) {
+  const client = new pg.Client({
+    host: dadosConexao.host,
+    port: Number(dadosConexao.port),
+    database: dadosConexao.database,
+    user: dadosConexao.user,
+    password: dadosConexao.password,
+    ssl: dadosConexao.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+
+  await client.connect();
+
+  try {
+    const { rows } = await client.query(
+      "select forma_pagamento, count(*) as qtd from negociacao_parcela group by 1 order by 2 desc limit 20",
+    );
+    return rows.map((row) => ({ formaPagamento: row.forma_pagamento, quantidade: Number(row.qtd) }));
+  } finally {
+    await client.end().catch(() => undefined);
+  }
+}
+
 async function encerrarConexao() {
   if (pool) {
     await pool.end();
@@ -172,5 +203,6 @@ module.exports = {
   buscarEstoqueAtualizado,
   testarConexao,
   buscarLojasLinkPro,
+  buscarFormasPagamentoLinkPro,
   encerrarConexao,
 };
