@@ -31,6 +31,11 @@ function carregarConfig() {
       email: process.env.FERRO_CIANORTE_EMAIL ?? "",
       password: process.env.FERRO_CIANORTE_PASSWORD ?? "",
     },
+    // Data de corte: vendas anteriores a isso nunca são trazidas do Link
+    // Pro, pra não replicar histórico antigo (e decrementar de novo um
+    // estoque que já reflete essas vendas). Sem valor salvo ainda, usa hoje
+    // como padrão seguro.
+    syncDesde: process.env.SYNC_DESDE || new Date().toISOString().slice(0, 10),
     pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 15000),
     checkpointFile: process.env.CHECKPOINT_FILE ?? path.join(obterDiretorioBase(), "checkpoint.json"),
     mapaFormasPagamento: JSON.parse(process.env.MAPA_FORMAS_PAGAMENTO || "{}"),

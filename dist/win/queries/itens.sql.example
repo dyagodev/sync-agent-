@@ -3,20 +3,22 @@
 --
 -- Contrato que o agente espera desta query:
 --   venda_id       -> deve bater com o "id" retornado em vendas.sql
---   codigo_barras  -> usado para casar com o produto já cadastrado no Ferro Cianorte
+--   codigo_interno -> usado para casar com o produto já cadastrado no Ferro Cianorte
 --   quantidade     -> numérico
 --   preco_unitario -> preço efetivamente cobrado no item (já com desconto aplicado)
 --
 -- "negociacao_item_vendido" é a tabela de itens vendidos de verdade (existe
 -- também "negociacao_item_devolvido" pra devoluções, não tratado aqui).
--- "produto.cean" é o código de barras — "produto_codigo" é só o código
--- interno do Link Pro, não confundir os dois.
+-- "produto.produto_codigo" é o código interno do Link Pro (a etiqueta que a
+-- própria loja gera e cola no produto) — é ele que casa com o
+-- "codigo_interno" cadastrado no Ferro Cianorte, não "produto.cean" (que é
+-- o código de barras de fábrica, que muita peça solta de ferragem não tem).
 --
 -- O parâmetro $1 é um array com os ids de venda do lote atual.
 select
-  iv.id_negociacao as venda_id,
-  p.cean           as codigo_barras,
-  iv.qtd           as quantidade,
+  iv.id_negociacao   as venda_id,
+  p.produto_codigo   as codigo_interno,
+  iv.qtd             as quantidade,
   round(iv.preco_bruto_unitario * (1 - iv.desconto_percentual / 100.0), 2) as preco_unitario
 from negociacao_item_vendido iv
 join produto p on p.id_produto = iv.id_produto

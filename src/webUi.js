@@ -123,6 +123,7 @@ async function paginaHtml({ salvo = false } = {}) {
     <div class="grid">
       ${campo("Intervalo entre verificações (ms)", "POLL_INTERVAL_MS", env.POLL_INTERVAL_MS || "15000")}
       ${campo("Porta desta janela de configuração", "CONFIG_UI_PORT", env.CONFIG_UI_PORT || "4848")}
+      ${campo("Sincronizar vendas a partir de", "SYNC_DESDE", env.SYNC_DESDE || new Date().toISOString().slice(0, 10), { tipo: "date", ajuda: "Vendas mais antigas que essa data nunca são trazidas do Link Pro (evita reimportar histórico antigo)." })}
     </div>
 
     <h2>Mapeamento de lojas</h2>
@@ -379,6 +380,9 @@ function iniciarWebUi(log, aoSalvarConfig) {
           FERRO_CIANORTE_PASSWORD: params.get("FERRO_CIANORTE_PASSWORD") ?? "",
           POLL_INTERVAL_MS: params.get("POLL_INTERVAL_MS") ?? "15000",
           CONFIG_UI_PORT: params.get("CONFIG_UI_PORT") ?? "4848",
+          // Se o campo vier vazio, trava em hoje (não recalcula a cada save,
+          // senão um "salvar" de amanhã empurraria o corte pra frente de novo).
+          SYNC_DESDE: params.get("SYNC_DESDE") || lerEnvSalvo().SYNC_DESDE || new Date().toISOString().slice(0, 10),
           MAPA_FORMAS_PAGAMENTO: JSON.stringify(montarMapaFormasPagamento(params)),
           MAPA_LOJAS: JSON.stringify(montarMapaLojas(params)),
         });

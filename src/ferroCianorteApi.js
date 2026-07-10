@@ -1,7 +1,7 @@
 const { carregarConfig } = require("./config");
 
 let token = null;
-let mapaProdutosPorCodigoBarras = null;
+let mapaProdutosPorCodigoInterno = null;
 
 async function chamar(caminho, options = {}) {
   const { api } = carregarConfig();
@@ -37,20 +37,23 @@ async function autenticar() {
 }
 
 /**
- * Carrega (uma vez) o catálogo de produtos e monta um mapa código de barras -> produto_id,
- * usado para traduzir os itens vindos do Postgres externo. Não filtra por loja:
- * o cadastro de produto é único no Ferro Cianorte, só o estoque é por loja.
+ * Carrega (uma vez) o catálogo de produtos e monta um mapa código interno -> produto_id,
+ * usado para traduzir os itens vindos do Postgres externo. O código interno
+ * (etiqueta que a própria loja gera) é mais confiável que o código de
+ * barras de fábrica, que muita peça solta de ferragem não tem. Não filtra
+ * por loja: o cadastro de produto é único no Ferro Cianorte, só o estoque é
+ * por loja.
  */
 async function carregarMapaProdutos({ forcar = false } = {}) {
-  if (mapaProdutosPorCodigoBarras && !forcar) {
-    return mapaProdutosPorCodigoBarras;
+  if (mapaProdutosPorCodigoInterno && !forcar) {
+    return mapaProdutosPorCodigoInterno;
   }
 
   const produtos = await chamar("produtos");
-  mapaProdutosPorCodigoBarras = new Map(
-    produtos.filter((produto) => produto.codigo_barras).map((produto) => [produto.codigo_barras, produto.id]),
+  mapaProdutosPorCodigoInterno = new Map(
+    produtos.filter((produto) => produto.codigo_interno).map((produto) => [produto.codigo_interno, produto.id]),
   );
-  return mapaProdutosPorCodigoBarras;
+  return mapaProdutosPorCodigoInterno;
 }
 
 /**

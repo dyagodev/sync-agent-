@@ -32,8 +32,8 @@ function obterPool() {
  * itens e pagamentos agrupados por venda.
  */
 async function buscarVendasNovas(ultimoIdProcessado) {
-  const { queries } = carregarConfig();
-  const { rows: vendas } = await obterPool().query(queries.vendas, [ultimoIdProcessado]);
+  const { queries, syncDesde } = carregarConfig();
+  const { rows: vendas } = await obterPool().query(queries.vendas, [ultimoIdProcessado, syncDesde]);
 
   if (vendas.length === 0) {
     return [];

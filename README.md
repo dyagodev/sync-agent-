@@ -10,16 +10,26 @@ tela de vendas/relatórios.
 ## Como funciona
 
 1. A cada `POLL_INTERVAL_MS`, consulta `queries/vendas.sql` pedindo vendas com
-   `id` maior que o último processado (guardado em `checkpoint.json`). Essa
-   query já traz qual loja do Link Pro gerou cada venda.
+   `id` maior que o último processado (guardado em `checkpoint.json`) **e**
+   com data maior ou igual a `SYNC_DESDE` (configurável na janela do agente;
+   por padrão, o dia em que a configuração foi salva pela primeira vez) —
+   sem esse corte, a primeira execução tentaria replicar todo o histórico de
+   vendas do Link Pro, decrementando de novo um estoque que já reflete essas
+   vendas antigas. Essa query já traz qual loja do Link Pro gerou cada venda,
+   e o `data_hora` real da venda (preservado até o fim — o Ferro Cianorte usa
+   essa data no lugar da data da sincronização, senão relatório por período
+   ficaria errado).
 2. Para as vendas encontradas, busca os itens (`queries/itens.sql`) e as
    formas de pagamento (`queries/pagamentos.sql`).
 3. Traduz a loja de origem pra uma loja do Ferro Cianorte usando o
    **mapeamento de lojas** da janela de configuração — venda de loja sem
    mapeamento é ignorada e logada, não trava as demais.
-4. Resolve cada item pelo `codigo_barras` contra o catálogo já cadastrado no
-   Ferro Cianorte (produto sem correspondência é ignorado e logado, não trava
-   a venda toda).
+4. Resolve cada item pelo **código interno** (a etiqueta que a própria loja
+   gera e cola no produto — `produto.produto_codigo` no Link Pro) contra o
+   catálogo já cadastrado no Ferro Cianorte (produto sem correspondência é
+   ignorado e logado, não trava a venda toda). Não usamos mais o código de
+   barras de fábrica (`produto.cean`) pra isso, porque muita peça solta de
+   ferragem não tem um válido.
 5. Envia o lote pro Ferro Cianorte e atualiza o checkpoint.
 6. Também verifica `queries/estoque.sql` (opcional) atrás de qualquer estoque
    atualizado desde a última checagem — **inclusive ajustes feitos sem venda**
@@ -41,8 +51,10 @@ foi descoberto:
   orçamento). **`negociacao_item_vendido`** são os itens vendidos, ligados por
   `id_negociacao`. **`negociacao_parcela`** são as formas de pagamento, com
   `forma_pagamento` já em texto (`"Dinheiro"`, `"Pix"`, `"Cartao"`...).
-- **`produto.cean`** é o código de barras (não confundir com
-  `produto_codigo`, que é só o código interno do Link Pro).
+- **`produto.produto_codigo`** é o código interno do Link Pro (a etiqueta que
+  a própria loja gera) — é ele que usamos pra casar produto, não
+  `produto.cean` (código de barras de fábrica, que muita peça solta de
+  ferragem não tem).
 - **`log_produto_qtd_estoque`** é um histórico de toda mudança de estoque
   (venda ou ajuste manual/balanço) com timestamp — é o que `estoque.sql` usa
   pra sincronização incremental.

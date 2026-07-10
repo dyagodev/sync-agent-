@@ -30,21 +30,21 @@ async function sincronizarEstoque(log) {
     const lojaId = mapaLojas[String(registro.loja_externa)];
     if (!lojaId) {
       log(
-        `  Estoque: loja "${registro.loja_externa}" sem mapeamento em MAPA_LOJAS, ajuste ignorado (produto ${registro.codigo_barras}).`,
+        `  Estoque: loja "${registro.loja_externa}" sem mapeamento em MAPA_LOJAS, ajuste ignorado (produto ${registro.codigo_interno}).`,
       );
       continue;
     }
 
-    const produtoId = mapaProdutos.get(registro.codigo_barras);
+    const produtoId = mapaProdutos.get(registro.codigo_interno);
     if (!produtoId) {
       log(
-        `  Estoque: produto com código de barras "${registro.codigo_barras}" não encontrado no Ferro Cianorte, ajuste ignorado.`,
+        `  Estoque: produto com código interno "${registro.codigo_interno}" não encontrado no Ferro Cianorte, ajuste ignorado.`,
       );
       continue;
     }
 
     await definirEstoque(produtoId, lojaId, Number(registro.quantidade));
-    log(`  Estoque atualizado: produto ${registro.codigo_barras} na loja ${lojaId} -> ${registro.quantidade}`);
+    log(`  Estoque atualizado: produto ${registro.codigo_interno} na loja ${lojaId} -> ${registro.quantidade}`);
   }
 
   // Comparação de string funciona porque o Postgres sempre devolve

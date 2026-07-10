@@ -10,9 +10,9 @@ const NAMESPACE_LINKPRO = "5f2f2f5e-3d0a-4a8a-9b8a-2f6a4c6f9f10";
  * Converte uma venda lida do Postgres externo (com itens/pagamentos brutos)
  * no formato esperado por POST /api/vendas/sync. Retorna null se a loja de
  * origem não tiver mapeamento, ou se nenhum item pôde ser resolvido (produto
- * sem correspondência por código de barras).
+ * sem correspondência por código interno.
  */
-function transformarVenda(vendaExterna, mapaProdutosPorCodigoBarras, aviso) {
+function transformarVenda(vendaExterna, mapaProdutosPorCodigoInterno, aviso) {
   const config = carregarConfig();
 
   const lojaId = config.mapaLojas[String(vendaExterna.lojaExterna)];
@@ -26,11 +26,11 @@ function transformarVenda(vendaExterna, mapaProdutosPorCodigoBarras, aviso) {
   const itens = [];
 
   for (const item of vendaExterna.itens) {
-    const produtoId = mapaProdutosPorCodigoBarras.get(item.codigo_barras);
+    const produtoId = mapaProdutosPorCodigoInterno.get(item.codigo_interno);
 
     if (!produtoId) {
       aviso(
-        `Venda externa #${vendaExterna.id}: produto com código de barras "${item.codigo_barras}" não encontrado no Ferro Cianorte, item ignorado.`,
+        `Venda externa #${vendaExterna.id}: produto com código interno "${item.codigo_interno}" não encontrado no Ferro Cianorte, item ignorado.`,
       );
       continue;
     }
@@ -70,6 +70,7 @@ function transformarVenda(vendaExterna, mapaProdutosPorCodigoBarras, aviso) {
   return {
     uuid: uuidv5(String(vendaExterna.id), NAMESPACE_LINKPRO),
     loja_id: lojaId,
+    data_hora: vendaExterna.dataHora,
     itens,
     pagamentos,
   };

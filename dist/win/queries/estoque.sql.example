@@ -9,7 +9,7 @@
 --
 -- Contrato que o agente espera desta query (não pode mudar os apelidos):
 --   loja_externa    -> identificador da loja/filial no Link Pro
---   codigo_barras   -> usado para casar com o produto cadastrado no Ferro Cianorte
+--   codigo_interno  -> usado para casar com o produto cadastrado no Ferro Cianorte
 --   quantidade      -> quantidade ATUAL em estoque (valor absoluto, não delta)
 --   atualizado_em   -> timestamp da última atualização desse registro de estoque
 --
@@ -17,7 +17,10 @@
 -- atualização". Quem tem isso é "log_produto_qtd_estoque": um registro
 -- histórico toda vez que qtd_estoque muda, seja por venda ou por ajuste
 -- manual — exatamente o que precisamos. "qtd_estoque_novo" já é o valor
--- final depois da mudança.
+-- final depois da mudança. "produto.produto_codigo" é o código interno do
+-- Link Pro (a etiqueta que a própria loja gera) — é ele que casa com o
+-- "codigo_interno" do Ferro Cianorte, não "produto.cean" (código de barras
+-- de fábrica, que muita peça solta de ferragem não tem).
 --
 -- Mesma observação de vendas.sql sobre loja_externa vir de
 -- dados_empresa.codigo_loja (código real desta loja) em vez de um valor
@@ -27,9 +30,9 @@
 -- primeira execução, ou seja: a primeira rodada traz o estoque inteiro).
 select
   (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
-  p.cean             as codigo_barras,
+  p.produto_codigo   as codigo_interno,
   l.qtd_estoque_novo as quantidade,
-  l.data_hora        as atualizado_em
+  l.data_hora         as atualizado_em
 from log_produto_qtd_estoque l
 join produto p on p.id_produto = l.id_produto
 where l.data_hora > $1
