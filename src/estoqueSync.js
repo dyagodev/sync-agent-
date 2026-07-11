@@ -43,8 +43,12 @@ async function sincronizarEstoque(log) {
       continue;
     }
 
-    await definirEstoque(produtoId, lojaId, Number(registro.quantidade));
-    log(`  Estoque atualizado: produto ${registro.codigo_interno} na loja ${lojaId} -> ${registro.quantidade}`);
+    // O Ferro Cianorte guarda estoque como inteiro; o Link Pro pode ter
+    // quantidade fracionária (produto vendido por peso/fração) — arredonda
+    // aqui, igual o fluxo de venda já faz do lado do Laravel.
+    const quantidadeArredondada = Math.round(Number(registro.quantidade));
+    await definirEstoque(produtoId, lojaId, quantidadeArredondada);
+    log(`  Estoque atualizado: produto ${registro.codigo_interno} na loja ${lojaId} -> ${quantidadeArredondada}`);
   }
 
   // A query já devolve ordenado por (atualizado_em, id) crescente, então o
