@@ -1,5 +1,5 @@
 const { carregarConfig } = require("./config");
-const { lerUltimaAtualizacaoEstoque, salvarUltimaAtualizacaoEstoque } = require("./checkpoint");
+const { lerCursorEstoque, salvarCursorEstoque } = require("./checkpoint");
 const { carregarMapaProdutos, definirEstoque } = require("./ferroCianorteApi");
 const { buscarEstoqueAtualizado } = require("./sourceDb");
 
@@ -15,8 +15,8 @@ async function sincronizarEstoque(log) {
     return;
   }
 
-  const desde = lerUltimaAtualizacaoEstoque();
-  const registros = await buscarEstoqueAtualizado(desde);
+  const { ultimaAtualizacaoEstoque: desde, ultimoIdEstoque } = lerCursorEstoque();
+  const registros = await buscarEstoqueAtualizado(desde, ultimoIdEstoque);
 
   if (registros.length === 0) {
     return;
@@ -47,14 +47,10 @@ async function sincronizarEstoque(log) {
     log(`  Estoque atualizado: produto ${registro.codigo_interno} na loja ${lojaId} -> ${registro.quantidade}`);
   }
 
-  // Comparação de string funciona porque o Postgres sempre devolve
-  // timestamp em formato "YYYY-MM-DD HH:MI:SS[.ffffff]" (data e hora com
-  // largura fixa) — ver nota em sourceDb.js sobre tratar isso como texto puro.
-  const maiorData = registros.reduce(
-    (maior, registro) => (registro.atualizado_em > maior ? registro.atualizado_em : maior),
-    desde,
-  );
-  salvarUltimaAtualizacaoEstoque(maiorData);
+  // A query já devolve ordenado por (atualizado_em, id) crescente, então o
+  // último registro do lote é o cursor mais alto processado até agora.
+  const ultimoRegistro = registros[registros.length - 1];
+  salvarCursorEstoque(ultimoRegistro.atualizado_em, ultimoRegistro.id);
 }
 
 module.exports = { sincronizarEstoque };

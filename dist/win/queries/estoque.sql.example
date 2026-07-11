@@ -8,6 +8,7 @@
 -- que senão nunca apareceriam pro agente (que só olha a tabela de vendas).
 --
 -- Contrato que o agente espera desta query (não pode mudar os apelidos):
+--   id              -> identificador único e crescente do registro de log
 --   loja_externa    -> identificador da loja/filial no Link Pro
 --   codigo_interno  -> usado para casar com o produto cadastrado no Ferro Cianorte
 --   quantidade      -> quantidade ATUAL em estoque (valor absoluto, não delta)
@@ -26,15 +27,26 @@
 -- dados_empresa.codigo_loja (código real desta loja) em vez de um valor
 -- inventado — ver aquele arquivo pra entender o motivo.
 --
--- O parâmetro $1 é o timestamp da última verificação (época Unix 0 na
--- primeira execução, ou seja: a primeira rodada traz o estoque inteiro).
+-- Cursor composto (data_hora, id) em vez de só data_hora: contagem de
+-- inventário ou entrada de mercadoria em lote grava várias linhas com o
+-- MESMO timestamp exato — com corte só por "data_hora > último", quem
+-- empata no timestamp do checkpoint fica pra trás pra sempre (a
+-- comparação "maior que" exclui quem tem o mesmo instante do último já
+-- processado, mesmo sem ter sido processado ainda). O par (data_hora, id)
+-- nunca empata de verdade, então nada fica pra trás.
+--
+-- $1 é o timestamp da última verificação (época Unix 0 na primeira
+-- execução, ou seja: a primeira rodada traz o estoque inteiro). $2 é o id
+-- do último registro de log já processado NESSE mesmo timestamp (0 se for
+-- um timestamp novo).
 select
+  l.id_log_produto_qtd_estoque as id,
   (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
   p.produto_codigo   as codigo_interno,
   l.qtd_estoque_novo as quantidade,
   l.data_hora         as atualizado_em
 from log_produto_qtd_estoque l
 join produto p on p.id_produto = l.id_produto
-where l.data_hora > $1
-order by l.data_hora asc
+where (l.data_hora, l.id_log_produto_qtd_estoque) > ($1::timestamp, $2::bigint)
+order by l.data_hora asc, l.id_log_produto_qtd_estoque asc
 limit 500;

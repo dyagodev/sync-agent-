@@ -62,13 +62,13 @@ async function buscarVendasNovas(ultimoIdProcessado) {
  * lançada direto no Link Pro). Retorna [] se a query estoque.sql não existir
  * (recurso opcional).
  */
-async function buscarEstoqueAtualizado(desde) {
+async function buscarEstoqueAtualizado(desde, ultimoId) {
   const { queries } = carregarConfig();
   if (!queries.estoque) {
     return [];
   }
 
-  const { rows } = await obterPool().query(queries.estoque, [desde]);
+  const { rows } = await obterPool().query(queries.estoque, [desde, ultimoId]);
   return rows;
 }
 

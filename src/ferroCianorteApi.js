@@ -1,7 +1,10 @@
 const { carregarConfig } = require("./config");
 
+const TTL_MAPA_PRODUTOS_MS = 5 * 60 * 1000;
+
 let token = null;
 let mapaProdutosPorCodigoInterno = null;
+let mapaProdutosCarregadoEm = 0;
 
 async function chamar(caminho, options = {}) {
   const { api } = carregarConfig();
@@ -37,15 +40,21 @@ async function autenticar() {
 }
 
 /**
- * Carrega (uma vez) o catálogo de produtos e monta um mapa código interno -> produto_id,
+ * Carrega o catálogo de produtos e monta um mapa código interno -> produto_id,
  * usado para traduzir os itens vindos do Postgres externo. O código interno
  * (etiqueta que a própria loja gera) é mais confiável que o código de
  * barras de fábrica, que muita peça solta de ferragem não tem. Não filtra
  * por loja: o cadastro de produto é único no Ferro Cianorte, só o estoque é
  * por loja.
+ *
+ * Fica em cache por até TTL_MAPA_PRODUTOS_MS — sem isso, produto cadastrado
+ * ou editado no Ferro Cianorte depois que o agente subiu nunca era
+ * encontrado, já que o processo roda dias/semanas sem reiniciar (causava
+ * "alguns produtos não atualizam o estoque").
  */
 async function carregarMapaProdutos({ forcar = false } = {}) {
-  if (mapaProdutosPorCodigoInterno && !forcar) {
+  const expirado = Date.now() - mapaProdutosCarregadoEm > TTL_MAPA_PRODUTOS_MS;
+  if (mapaProdutosPorCodigoInterno && !forcar && !expirado) {
     return mapaProdutosPorCodigoInterno;
   }
 
@@ -53,6 +62,7 @@ async function carregarMapaProdutos({ forcar = false } = {}) {
   mapaProdutosPorCodigoInterno = new Map(
     produtos.filter((produto) => produto.codigo_interno).map((produto) => [produto.codigo_interno, produto.id]),
   );
+  mapaProdutosCarregadoEm = Date.now();
   return mapaProdutosPorCodigoInterno;
 }
 
