@@ -23,6 +23,13 @@
 -- Se a sua instalação for diferente (uma única base com todas as lojas),
 -- troque a subquery abaixo pela coluna real de loja em "negociacao".
 --
+-- IMPORTANTE: "venda = true" sozinho não garante venda de verdade fechada —
+-- confirmado com dado real que negociação tipo "Orçamento" (não confirmada
+-- no caixa) também vem com venda = true. O que diferencia é
+-- "pre_venda_codigo": quando preenchido, a negociação ainda está pendurada
+-- numa pré-venda/orçamento, não foi finalizada como venda de balcão. Só
+-- sincroniza quando pre_venda_codigo é nulo.
+--
 -- O parâmetro $1 é o id da última venda já processada (0 na primeira
 -- execução). O parâmetro $2 é a data de corte (SYNC_DESDE, configurável na
 -- janela do agente — por padrão, o dia em que a configuração foi salva):
@@ -37,6 +44,7 @@ select
 from negociacao n
 where n.id_negociacao > $1
   and n.venda = true
+  and n.pre_venda_codigo is null
   and n.data >= $2::timestamp
 order by n.id_negociacao asc
 limit 200;
