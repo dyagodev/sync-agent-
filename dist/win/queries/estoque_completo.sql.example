@@ -1,0 +1,30 @@
+-- Reconciliação completa de estoque — diferente de estoque.sql (que segue
+-- o HISTÓRICO incremental em log_produto_qtd_estoque, rápido mas pode ter
+-- furo se algum tipo de ajuste não passar por aquela tabela de log), esta
+-- query lê o valor ATUAL de verdade direto em "produto.qtd_estoque" — a
+-- mesma coluna que o Link Pro usa pra tela do produto, sempre correta.
+--
+-- Rodada de tempos em tempos (não a cada ciclo, é mais pesada — lê a tabela
+-- de produtos inteira) como uma rede de segurança que corrige qualquer
+-- divergência que o histórico incremental deixou passar, seja qual for o
+-- motivo.
+--
+-- Contrato que o agente espera desta query (não pode mudar os apelidos):
+--   loja_externa    -> identificador da loja/filial no Link Pro
+--   codigo_interno  -> usado para casar com o produto cadastrado no Ferro Cianorte
+--   quantidade      -> quantidade ATUAL em estoque (valor absoluto, não delta)
+--
+-- Não recebe parâmetro — sempre lê o estado atual completo.
+select
+  (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
+  p.produto_codigo as codigo_interno,
+  p.qtd_estoque     as quantidade,
+  p.descricao          as descricao,
+  p.cean               as codigo_barras,
+  coalesce(u.descricao, 'UN') as unidade,
+  p.preco_custo        as preco_custo,
+  p.preco_venda        as preco_venda_cadastro
+from produto p
+left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
+where p.inativo = false
+  and p.produto_codigo is not null;

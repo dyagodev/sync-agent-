@@ -1,7 +1,7 @@
 const { exec } = require("node:child_process");
 const { carregarConfig, estaConfigurado, itensFaltando } = require("./config");
 const { lerUltimoIdProcessado, salvarUltimoIdProcessado } = require("./checkpoint");
-const { autenticar, carregarMapaProdutos, sincronizarVendas } = require("./ferroCianorteApi");
+const { autenticar, garantirProduto, sincronizarVendas } = require("./ferroCianorteApi");
 const { buscarVendasNovas } = require("./sourceDb");
 const { transformarVenda } = require("./transformar");
 const { sincronizarEstoque } = require("./estoqueSync");
@@ -27,10 +27,15 @@ async function processarLote() {
 
   log(`${vendasExternas.length} venda(s) nova(s) encontrada(s), sincronizando...`);
 
-  const mapaProdutos = await carregarMapaProdutos();
-  const vendasTransformadas = vendasExternas
-    .map((venda) => transformarVenda(venda, mapaProdutos, log))
-    .filter((venda) => venda !== null);
+  // Sequencial (não Promise.all) de propósito: cadastro automático de
+  // produto novo precisa que a venda anterior já tenha atualizado o mapa
+  // em memória antes da próxima rodar, senão duas vendas com o mesmo
+  // produto novo tentariam cadastrar o mesmo código interno em paralelo.
+  const vendasTransformadas = [];
+  for (const venda of vendasExternas) {
+    const transformada = await transformarVenda(venda, garantirProduto, log);
+    if (transformada) vendasTransformadas.push(transformada);
+  }
 
   const resultado = await sincronizarVendas(vendasTransformadas);
 

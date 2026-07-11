@@ -67,6 +67,65 @@ async function carregarMapaProdutos({ forcar = false } = {}) {
 }
 
 /**
+ * Cria um produto novo no Ferro Cianorte e já adiciona no mapa em memória
+ * (evita esperar o próximo refresh do cache só pra achar o produto que
+ * acabou de criar).
+ */
+async function criarProduto(dados) {
+  const produto = await chamar("produtos", {
+    method: "POST",
+    body: JSON.stringify(dados),
+  });
+
+  if (mapaProdutosPorCodigoInterno && produto.codigo_interno) {
+    mapaProdutosPorCodigoInterno.set(produto.codigo_interno, produto.id);
+  }
+
+  return produto;
+}
+
+/**
+ * Resolve o produto_id de um código interno — se não existir ainda no
+ * Ferro Cianorte, cadastra automaticamente com os dados vindos do Link Pro
+ * (descrição, preço, unidade), em vez de só ignorar o item/ajuste de
+ * estoque. Sem descrição não tem como cadastrar (campo obrigatório), nesse
+ * caso continua ignorando e avisando.
+ */
+async function garantirProduto(codigoInterno, dadosOrigem, aviso) {
+  const mapa = await carregarMapaProdutos();
+  const existente = mapa.get(codigoInterno);
+  if (existente) return existente;
+
+  const descricao = String(dadosOrigem.descricao ?? "").trim();
+  if (!descricao) {
+    aviso(`Produto com código interno "${codigoInterno}" não encontrado e sem descrição pra cadastrar automaticamente.`);
+    return null;
+  }
+
+  try {
+    const precoCusto = Number(dadosOrigem.preco_custo) || 0;
+    const precoVenda = Number(dadosOrigem.preco_venda_cadastro) || 0;
+    const margem = precoCusto > 0 ? Math.round(((precoVenda - precoCusto) / precoCusto) * 10000) / 100 : 0;
+
+    const produto = await criarProduto({
+      codigo_interno: codigoInterno,
+      codigo_barras: dadosOrigem.codigo_barras || null,
+      descricao,
+      unidade: dadosOrigem.unidade || "UN",
+      preco_custo: precoCusto,
+      margem_percentual: margem,
+      preco_venda: precoVenda,
+    });
+
+    aviso(`Produto "${descricao}" (código interno "${codigoInterno}") cadastrado automaticamente no Ferro Cianorte.`);
+    return produto.id;
+  } catch (erro) {
+    aviso(`Não foi possível cadastrar automaticamente o produto "${codigoInterno}": ${erro.message}`);
+    return null;
+  }
+}
+
+/**
  * Lista as lojas cadastradas no Ferro Cianorte — usado só pela janela de
  * configuração, como referência pra preencher o mapeamento de lojas.
  * Exige que o usuário de integração seja admin (rota restrita a admin).
@@ -98,4 +157,12 @@ async function definirEstoque(produtoId, lojaId, quantidade) {
   });
 }
 
-module.exports = { autenticar, carregarMapaProdutos, listarLojas, sincronizarVendas, definirEstoque };
+module.exports = {
+  autenticar,
+  carregarMapaProdutos,
+  criarProduto,
+  garantirProduto,
+  listarLojas,
+  sincronizarVendas,
+  definirEstoque,
+};

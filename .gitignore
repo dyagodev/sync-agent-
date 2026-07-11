@@ -6,5 +6,6 @@ queries/itens.sql
 queries/pagamentos.sql
 logs
 queries/estoque.sql
+queries/estoque_completo.sql
 estrutura-banco-*.txt
 estrutura-banco-*.json

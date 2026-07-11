@@ -20,9 +20,14 @@ function normalizar(texto) {
  * Converte uma venda lida do Postgres externo (com itens/pagamentos brutos)
  * no formato esperado por POST /api/vendas/sync. Retorna null se a loja de
  * origem não tiver mapeamento, ou se nenhum item pôde ser resolvido (produto
- * sem correspondência por código interno.
+ * sem correspondência por código interno e sem descrição pra cadastrar).
+ *
+ * garantirProduto(codigoInterno, dadosOrigem, aviso) resolve o produto_id —
+ * cadastra automaticamente no Ferro Cianorte se o código interno ainda não
+ * existir (em vez de só ignorar o item), usando descrição/preço vindos do
+ * Link Pro.
  */
-function transformarVenda(vendaExterna, mapaProdutosPorCodigoInterno, aviso) {
+async function transformarVenda(vendaExterna, garantirProduto, aviso) {
   const config = carregarConfig();
 
   const lojaId = config.mapaLojas[String(vendaExterna.lojaExterna)];
@@ -36,7 +41,7 @@ function transformarVenda(vendaExterna, mapaProdutosPorCodigoInterno, aviso) {
   const itens = [];
 
   for (const item of vendaExterna.itens) {
-    const produtoId = mapaProdutosPorCodigoInterno.get(item.codigo_interno);
+    const produtoId = await garantirProduto(item.codigo_interno, item, aviso);
 
     if (!produtoId) {
       aviso(

@@ -56,7 +56,15 @@ function carregarConfig() {
       // Opcional: sem esse arquivo, o agente só sincroniza vendas, não ajustes
       // de estoque feitos sem venda.
       estoque: lerQuery("estoque.sql"),
+      // Opcional: reconciliação completa periódica (lê produto.qtd_estoque
+      // direto, não o histórico) — rede de segurança contra furo no
+      // histórico incremental.
+      estoqueCompleto: lerQuery("estoque_completo.sql"),
     },
+    // A cada quantos ciclos roda a reconciliação completa (mais pesada que
+    // o incremental, não faz sentido em todo poll). Padrão: a cada 120
+    // ciclos (~30min com POLL_INTERVAL_MS de 15s).
+    reconciliacaoEstoqueACadaCiclos: Number(process.env.RECONCILIACAO_ESTOQUE_A_CADA_CICLOS ?? 120),
   };
 }
 

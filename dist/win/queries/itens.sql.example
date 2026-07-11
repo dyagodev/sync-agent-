@@ -6,6 +6,10 @@
 --   codigo_interno -> usado para casar com o produto já cadastrado no Ferro Cianorte
 --   quantidade     -> numérico
 --   preco_unitario -> preço efetivamente cobrado no item (já com desconto aplicado)
+--   descricao, unidade, codigo_barras, preco_custo, preco_venda_cadastro ->
+--     dados do cadastro do produto no Link Pro, usados só se o agente
+--     precisar CRIAR o produto no Ferro Cianorte (código interno não
+--     encontrado) — sem isso ele não teria como cadastrar, só ignorar.
 --
 -- "negociacao_item_vendido" é a tabela de itens vendidos de verdade (existe
 -- também "negociacao_item_devolvido" pra devoluções, não tratado aqui).
@@ -19,7 +23,13 @@ select
   iv.id_negociacao   as venda_id,
   p.produto_codigo   as codigo_interno,
   iv.qtd             as quantidade,
-  round(iv.preco_bruto_unitario * (1 - iv.desconto_percentual / 100.0), 2) as preco_unitario
+  round(iv.preco_bruto_unitario * (1 - iv.desconto_percentual / 100.0), 2) as preco_unitario,
+  p.descricao         as descricao,
+  p.cean              as codigo_barras,
+  coalesce(u.descricao, 'UN') as unidade,
+  p.preco_custo       as preco_custo,
+  p.preco_venda       as preco_venda_cadastro
 from negociacao_item_vendido iv
 join produto p on p.id_produto = iv.id_produto
+left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
 where iv.id_negociacao = any($1::bigint[]);

@@ -44,9 +44,15 @@ select
   (select codigo_loja::text from dados_empresa limit 1) as loja_externa,
   p.produto_codigo   as codigo_interno,
   l.qtd_estoque_novo as quantidade,
-  l.data_hora         as atualizado_em
+  l.data_hora         as atualizado_em,
+  p.descricao          as descricao,
+  p.cean               as codigo_barras,
+  coalesce(u.descricao, 'UN') as unidade,
+  p.preco_custo        as preco_custo,
+  p.preco_venda        as preco_venda_cadastro
 from log_produto_qtd_estoque l
 join produto p on p.id_produto = l.id_produto
+left join prod_unidade u on u.id_prod_unidade = p.id_prod_unidade
 where (l.data_hora, l.id_log_produto_qtd_estoque) > ($1::timestamp, $2::bigint)
 order by l.data_hora asc, l.id_log_produto_qtd_estoque asc
 limit 500;

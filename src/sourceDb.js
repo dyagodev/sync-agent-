@@ -73,6 +73,23 @@ async function buscarEstoqueAtualizado(desde, ultimoId) {
 }
 
 /**
+ * Lê o estoque atual de TODOS os produtos direto de produto.qtd_estoque —
+ * usado como reconciliação completa periódica, pra corrigir qualquer furo
+ * que o histórico incremental (log_produto_qtd_estoque) tenha deixado
+ * passar. Retorna [] se a query estoque_completo.sql não existir (recurso
+ * opcional).
+ */
+async function buscarEstoqueCompleto() {
+  const { queries } = carregarConfig();
+  if (!queries.estoqueCompleto) {
+    return [];
+  }
+
+  const { rows } = await obterPool().query(queries.estoqueCompleto);
+  return rows;
+}
+
+/**
  * Testa uma conexão avulsa com os dados informados (usado pela janela de
  * configuração), sem afetar o pool principal do agente.
  */
@@ -202,6 +219,7 @@ async function encerrarConexao() {
 module.exports = {
   buscarVendasNovas,
   buscarEstoqueAtualizado,
+  buscarEstoqueCompleto,
   testarConexao,
   buscarLojasLinkPro,
   buscarFormasPagamentoLinkPro,
